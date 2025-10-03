@@ -7,10 +7,28 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <header>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen" style="display: none;">
+        <div class="login-container">
             <h1>🌍 Virtual Travel Assistant</h1>
-            <p>Plan your perfect trip with AI-powered assistance</p>
+            <p>Sign in to start planning your trip</p>
+            <button id="signInButton" class="primary-button">Sign In with Cognito</button>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="appScreen" class="container" style="display: none;">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>🌍 Virtual Travel Assistant</h1>
+                    <p>Plan your perfect trip with AI-powered assistance</p>
+                </div>
+                <div class="user-info">
+                    <span id="userEmail"></span>
+                    <button id="signOutButton" class="secondary">Sign Out</button>
+                </div>
+            </div>
         </header>
         
         <div class="chat-container">
@@ -29,6 +47,6 @@
         </div>
     </div>
     
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>

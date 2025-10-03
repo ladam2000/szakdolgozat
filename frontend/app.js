@@ -1,20 +1,81 @@
+import { userManager, signOutRedirect, getUser, isAuthenticated } from './auth.js';
+
 // Configuration - Replace with your API Gateway URL after deployment
 const API_URL = 'https://z7t3jpndjk.execute-api.eu-central-1.amazonaws.com/prod';
 
-// Generate or retrieve session ID
+// Global state
+let currentUser = null;
 let sessionId = localStorage.getItem('sessionId');
 if (!sessionId) {
     sessionId = generateSessionId();
-    localStorage.setItem('sessionId', sessionId);
+    localStorage.getItem('sessionId', sessionId);
 }
 
 // DOM elements
+const loginScreen = document.getElementById('loginScreen');
+const appScreen = document.getElementById('appScreen');
+const signInButton = document.getElementById('signInButton');
+const signOutButton = document.getElementById('signOutButton');
+const userEmail = document.getElementById('userEmail');
 const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const resetButton = document.getElementById('resetButton');
 
+// Initialize app
+async function initializeApp() {
+    // Check if returning from Cognito redirect
+    if (window.location.search.includes('code=')) {
+        try {
+            currentUser = await userManager.signinCallback();
+            window.history.replaceState({}, document.title, window.location.pathname);
+            showApp();
+            return;
+        } catch (error) {
+            console.error('Sign in callback error:', error);
+            showLogin();
+            return;
+        }
+    }
+    
+    // Check authentication status
+    const authenticated = await isAuthenticated();
+    
+    if (authenticated) {
+        currentUser = await getUser();
+        showApp();
+    } else {
+        showLogin();
+    }
+}
+
+// Show login screen
+function showLogin() {
+    loginScreen.style.display = 'flex';
+    appScreen.style.display = 'none';
+}
+
+// Show main app
+function showApp() {
+    loginScreen.style.display = 'none';
+    appScreen.style.display = 'block';
+    
+    if (currentUser) {
+        userEmail.textContent = currentUser.profile?.email || 'User';
+    }
+    
+    addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
+}
+
 // Event listeners
+signInButton.addEventListener('click', async () => {
+    await userManager.signinRedirect();
+});
+
+signOutButton.addEventListener('click', async () => {
+    await signOutRedirect();
+});
+
 sendButton.addEventListener('click', sendMessage);
 resetButton.addEventListener('click', resetSession);
 messageInput.addEventListener('keypress', (e) => {
@@ -23,12 +84,18 @@ messageInput.addEventListener('keypress', (e) => {
     }
 });
 
-// Initialize
-addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
+// Initialize on load
+initializeApp();
 
 async function sendMessage() {
     const message = messageInput.value.trim();
     if (!message) return;
+    
+    // Check authentication
+    if (!currentUser) {
+        addSystemMessage('Please sign in to continue');
+        return;
+    }
     
     // Disable input
     messageInput.disabled = true;
@@ -42,11 +109,12 @@ async function sendMessage() {
         // Show loading indicator
         const loadingId = addLoadingMessage();
         
-        // Send to API
+        // Send to API with auth token
         const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.access_token}`,
             },
             body: JSON.stringify({
                 message: message,

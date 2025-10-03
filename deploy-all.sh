@@ -119,7 +119,7 @@ echo ""
 
 # Get CloudFront URL
 CLOUDFRONT_URL=$(aws cloudformation describe-stacks \
-  --stack-name travelassistant \
+  --stack-name travel-assistant \
   --region $REGION \
   --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontURL`].OutputValue' \
   --output text)
