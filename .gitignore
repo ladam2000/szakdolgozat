@@ -27,6 +27,10 @@ wheels/
 *.zip
 lambda-package/
 agentcore-package/
+lambda-package.zip
+
+# Lambda build artifacts
+lambda/build/
 
 # IDE
 .vscode/
@@ -48,3 +52,6 @@ Thumbs.db
 
 # Backup files
 *.bak
+
+# SAM
+.aws-sam/

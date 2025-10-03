@@ -53,16 +53,20 @@ def search_activities(city: str, date: str) -> str:
 
 def create_coordinator_agent() -> Agent:
     """Create travel coordinator agent with all tools."""
-    return Agent(
+    agent = Agent(
         name="TravelCoordinator",
-        instructions="""You are a helpful travel planning assistant.
-        
-        Help users plan their trips by:
-        - Searching for flights using search_flights
-        - Finding hotels using search_hotels  
-        - Recommending activities using search_activities
-        
-        Ask clarifying questions when needed (origin, destination, dates, etc).
-        Provide comprehensive travel plans with all the information.""",
         tools=[search_flights, search_hotels, search_activities],
     )
+    
+    # Set system prompt
+    agent.system_prompt = """You are a helpful travel planning assistant.
+
+Help users plan their trips by:
+- Searching for flights using search_flights
+- Finding hotels using search_hotels  
+- Recommending activities using search_activities
+
+Ask clarifying questions when needed (origin, destination, dates, etc).
+Provide comprehensive travel plans with all the information."""
+    
+    return agent
