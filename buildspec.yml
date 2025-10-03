@@ -22,15 +22,13 @@ phases:
       - echo "Pushing Docker image to ECR..."
       - docker push $REPOSITORY_URI:latest
       - docker push $REPOSITORY_URI:$IMAGE_TAG
-      
       - echo "Build completed successfully"
       - echo ""
       - echo "=========================================="
-      - echo "Docker Image URI: $REPOSITORY_URI:latest"
+      - echo "Docker Image URI - $REPOSITORY_URI:latest"
       - echo "=========================================="
       - echo ""
-      - echo "Next steps:"
-      - echo "1. Go to Amazon Bedrock console"
+      - echo "Next steps - 1. Go to Amazon Bedrock console"
       - echo "2. Create a new Agent with AgentCore"
       - echo "3. Use the image URI above"
       - echo "4. Update Lambda environment variables with Agent ID and Alias ID"
