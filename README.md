@@ -26,4 +26,4 @@ A multi-agent travel planning system built with Strands Agent and AWS AgentCore.
 ## Environment Variables
 
 - `AWS_REGION` - AWS region (default: eu-central-1)
-- `BEDROCK_MODEL_ID` - Bedrock model (default: anthropic.claude-3-sonnet-20240229-v1:0)
+- `BEDROCK_MODEL_ID` - Bedrock model (default: us.amazon.nova-micro-v1:0)

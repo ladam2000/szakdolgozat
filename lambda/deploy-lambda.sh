@@ -3,17 +3,17 @@ set -e
 
 REGION="${AWS_REGION:-eu-central-1}"
 STACK_NAME="travel-assistant-lambda"
-AGENT_ID="${1:-}"
-AGENT_ALIAS_ID="${2:-}"
+AGENT_RUNTIME_ARN="${1:-}"
 
-if [ -z "$AGENT_ID" ] || [ -z "$AGENT_ALIAS_ID" ]; then
-    echo "Usage: ./deploy-lambda.sh <AGENT_ID> <AGENT_ALIAS_ID>"
+if [ -z "$AGENT_RUNTIME_ARN" ]; then
+    echo "Usage: ./deploy-lambda.sh <AGENT_RUNTIME_ARN>"
+    echo ""
+    echo "Example: ./deploy-lambda.sh arn:aws:bedrock-agentcore:eu-central-1:206631439304:runtime/hosted_agent_rkxzc-Yq2wttGAF4"
     exit 1
 fi
 
 echo "Deploying Lambda function..."
-echo "Agent ID: $AGENT_ID"
-echo "Agent Alias ID: $AGENT_ALIAS_ID"
+echo "Agent Runtime ARN: $AGENT_RUNTIME_ARN"
 echo ""
 
 # Create build directory
@@ -42,8 +42,7 @@ aws cloudformation deploy \
     --capabilities CAPABILITY_IAM \
     --region $REGION \
     --parameter-overrides \
-        AgentId=$AGENT_ID \
-        AgentAliasId=$AGENT_ALIAS_ID
+        AgentRuntimeArn=$AGENT_RUNTIME_ARN
 
 # Get Lambda function name
 FUNCTION_NAME=$(aws cloudformation describe-stacks \

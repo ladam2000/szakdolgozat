@@ -4,7 +4,7 @@ Description: 'Virtual Travel Assistant - Multi-Agent System with Bedrock AgentCo
 Parameters:
   BedrockModelId:
     Type: String
-    Default: 'anthropic.claude-3-sonnet-20240229-v1:0'
+    Default: 'us.amazon.nova-micro-v1:0'
     Description: Bedrock model ID for agents
 
 Resources:

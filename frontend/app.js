@@ -1,5 +1,5 @@
 // Configuration - Replace with your API Gateway URL after deployment
-const API_URL = 'https://dr3tg31ga7.execute-api.eu-central-1.amazonaws.com/prod';
+const API_URL = 'https://z7t3jpndjk.execute-api.eu-central-1.amazonaws.com/prod';
 
 // Generate or retrieve session ID
 let sessionId = localStorage.getItem('sessionId');

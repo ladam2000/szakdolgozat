@@ -57,7 +57,7 @@ def initialize_services():
     global coordinator_agent, memory_manager, guardrails_manager, observability_manager
     
     region = os.environ.get("AWS_REGION", "eu-central-1")
-    model_id = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+    model_id = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-micro-v1:0")
     guardrail_id = os.environ.get("GUARDRAIL_ID")
     guardrail_version = os.environ.get("GUARDRAIL_VERSION", "DRAFT")
     

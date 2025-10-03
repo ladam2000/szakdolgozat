@@ -2,15 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Lambda function for AgentCore proxy
 
 Parameters:
-  AgentId:
+  AgentRuntimeArn:
     Type: String
-    Description: Bedrock Agent ID
-    Default: ''
-  
-  AgentAliasId:
-    Type: String
-    Description: Bedrock Agent Alias ID
-    Default: ''
+    Description: AgentCore Runtime ARN
+    Default: 'arn:aws:bedrock-agentcore:eu-central-1:206631439304:runtime/hosted_agent_rkxzc-Yq2wttGAF4'
 
 Resources:
   # Lambda Execution Role
@@ -27,14 +22,16 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: BedrockAgentAccess
+        - PolicyName: AgentCoreRuntimeAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - bedrock:InvokeAgent
-                Resource: '*'
+                  - bedrock-agentcore:InvokeAgentRuntime
+                Resource: 
+                  - !Ref AgentRuntimeArn
+                  - !Sub '${AgentRuntimeArn}/*'
 
   # Lambda Function
   AgentCoreProxyFunction:
@@ -48,8 +45,7 @@ Resources:
       MemorySize: 256
       Environment:
         Variables:
-          AGENT_ID: !Ref AgentId
-          AGENT_ALIAS_ID: !Ref AgentAliasId
+          AGENT_RUNTIME_ARN: !Ref AgentRuntimeArn
       Code:
         ZipFile: |
           import json
@@ -95,11 +91,25 @@ Resources:
       PayloadFormatVersion: '2.0'
 
   # API Gateway Routes
-  DefaultRoute:
+  ChatRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref ApiGateway
-      RouteKey: '$default'
+      RouteKey: 'POST /chat'
+      Target: !Sub 'integrations/${ApiIntegration}'
+  
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'GET /health'
+      Target: !Sub 'integrations/${ApiIntegration}'
+  
+  OptionsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'OPTIONS /{proxy+}'
       Target: !Sub 'integrations/${ApiIntegration}'
 
   # API Gateway Stage
