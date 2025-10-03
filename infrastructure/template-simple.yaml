@@ -1,0 +1,280 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Virtual Travel Assistant - Multi-Agent System with AgentCore'
+
+Parameters:
+  BedrockModelId:
+    Type: String
+    Default: 'anthropic.claude-3-sonnet-20240229-v1:0'
+    Description: Bedrock model ID for agents
+  
+  GuardrailId:
+    Type: String
+    Default: ''
+    Description: Optional Bedrock Guardrail ID
+  
+  GuardrailVersion:
+    Type: String
+    Default: 'DRAFT'
+    Description: Guardrail version
+
+Resources:
+  # S3 Bucket for Frontend
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-frontend-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # S3 Bucket for Build Artifacts
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-artifacts-${AWS::AccountId}'
+
+  # CloudFront Origin Access Control
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            S3OriginConfig: {}
+            OriginAccessControlId: !Ref CloudFrontOAC
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          Compress: true
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+
+  # Bucket Policy for CloudFront
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/*'
+              - Effect: Allow
+                Action:
+                  - bedrock:ApplyGuardrail
+                Resource:
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:guardrail/*'
+
+  # Lambda Function with AgentCore
+  AgentCoreFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-agentcore'
+      Runtime: python3.11
+      Handler: app.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 2048
+      Environment:
+        Variables:
+          AWS_REGION: !Ref AWS::Region
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          GUARDRAIL_ID: !Ref GuardrailId
+          GUARDRAIL_VERSION: !Ref GuardrailVersion
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({'message': 'Placeholder - Deploy with CodeBuild'})
+              }
+
+  # Lambda Permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AgentCoreFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}-api'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - '*'
+
+  # API Gateway Integration
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt AgentCoreFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  # API Gateway Routes
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: '$default'
+      Target: !Sub 'integrations/${ApiIntegration}'
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApiGateway
+      StageName: prod
+      AutoDeploy: true
+
+  # CodeBuild Role
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub '${ArtifactBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - lambda:UpdateFunctionCode
+                Resource: !GetAtt AgentCoreFunction.Arn
+
+  # CodeBuild Project
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${AWS::StackName}-build'
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: S3
+        Location: !Ref ArtifactBucket
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref ArtifactBucket
+          - Name: LAMBDA_FUNCTION_NAME
+            Value: !Ref AgentCoreFunction
+      Source:
+        Type: NO_SOURCE
+        BuildSpec: buildspec.yml
+
+Outputs:
+  CloudFrontURL:
+    Description: CloudFront Distribution URL
+    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+  
+  ApiGatewayURL:
+    Description: API Gateway Endpoint URL
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+  
+  FrontendBucket:
+    Description: S3 Bucket for Frontend
+    Value: !Ref FrontendBucket
+  
+  ArtifactBucket:
+    Description: S3 Bucket for Build Artifacts
+    Value: !Ref ArtifactBucket
+  
+  LambdaFunction:
+    Description: Lambda Function Name
+    Value: !Ref AgentCoreFunction
+  
+  CodeBuildProject:
+    Description: CodeBuild Project Name
+    Value: !Ref CodeBuildProject

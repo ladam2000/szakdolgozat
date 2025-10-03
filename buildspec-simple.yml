@@ -1,0 +1,44 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+  
+  build:
+    commands:
+      - echo "Building Lambda package with AgentCore..."
+      - mkdir -p build
+      
+      # Install dependencies
+      - pip install -r agentcore/requirements.txt -t build/
+      
+      # Copy AgentCore code
+      - cp -r agentcore/*.py build/
+      - cp -r agentcore/agentcore build/
+      
+      # Create deployment package
+      - cd build
+      - zip -r ../lambda-package.zip . -x "*.pyc" -x "__pycache__/*"
+      - cd ..
+      
+      - echo "Build completed"
+  
+  post_build:
+    commands:
+      - echo "Uploading to S3..."
+      - aws s3 cp lambda-package.zip s3://${ARTIFACT_BUCKET}/lambda-package.zip
+      
+      - echo "Updating Lambda function..."
+      - aws lambda update-function-code --function-name ${LAMBDA_FUNCTION_NAME} --s3-bucket ${ARTIFACT_BUCKET} --s3-key lambda-package.zip
+      
+      - echo "Deployment completed"
+
+artifacts:
+  files:
+    - lambda-package.zip
+  name: build-$(date +%Y%m%d-%H%M%S)
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'

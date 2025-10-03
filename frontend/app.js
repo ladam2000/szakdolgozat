@@ -1,0 +1,152 @@
+// Configuration - Replace with your API Gateway URL after deployment
+const API_URL = 'https://dr3tg31ga7.execute-api.eu-central-1.amazonaws.com/prod';
+
+// Generate or retrieve session ID
+let sessionId = localStorage.getItem('sessionId');
+if (!sessionId) {
+    sessionId = generateSessionId();
+    localStorage.setItem('sessionId', sessionId);
+}
+
+// DOM elements
+const messagesContainer = document.getElementById('messages');
+const messageInput = document.getElementById('messageInput');
+const sendButton = document.getElementById('sendButton');
+const resetButton = document.getElementById('resetButton');
+
+// Event listeners
+sendButton.addEventListener('click', sendMessage);
+resetButton.addEventListener('click', resetSession);
+messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        sendMessage();
+    }
+});
+
+// Initialize
+addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
+
+async function sendMessage() {
+    const message = messageInput.value.trim();
+    if (!message) return;
+    
+    // Disable input
+    messageInput.disabled = true;
+    sendButton.disabled = true;
+    
+    // Add user message
+    addMessage(message, 'user');
+    messageInput.value = '';
+    
+    try {
+        // Show loading indicator
+        const loadingId = addLoadingMessage();
+        
+        // Send to API
+        const response = await fetch(`${API_URL}/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: message,
+                session_id: sessionId,
+            }),
+        });
+        
+        // Remove loading indicator
+        removeMessage(loadingId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Add assistant response
+        addMessage(data.response, 'assistant');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        addSystemMessage('Sorry, there was an error processing your request. Please try again.');
+    } finally {
+        // Re-enable input
+        messageInput.disabled = false;
+        sendButton.disabled = false;
+        messageInput.focus();
+    }
+}
+
+async function resetSession() {
+    if (!confirm('Are you sure you want to reset the conversation?')) {
+        return;
+    }
+    
+    try {
+        await fetch(`${API_URL}/reset`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+            }),
+        });
+        
+        // Clear messages
+        messagesContainer.innerHTML = '';
+        
+        // Generate new session ID
+        sessionId = generateSessionId();
+        localStorage.setItem('sessionId', sessionId);
+        
+        addSystemMessage('Conversation reset. How can I help you plan your trip?');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        addSystemMessage('Error resetting conversation. Please refresh the page.');
+    }
+}
+
+function addMessage(text, type) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}`;
+    messageDiv.textContent = text;
+    messagesContainer.appendChild(messageDiv);
+    scrollToBottom();
+    return messageDiv.id = generateId();
+}
+
+function addSystemMessage(text) {
+    return addMessage(text, 'system');
+}
+
+function addLoadingMessage() {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+    messageDiv.innerHTML = '<span class="loading"></span> <span class="loading"></span> <span class="loading"></span>';
+    const id = generateId();
+    messageDiv.id = id;
+    messagesContainer.appendChild(messageDiv);
+    scrollToBottom();
+    return id;
+}
+
+function removeMessage(id) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.remove();
+    }
+}
+
+function scrollToBottom() {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function generateId() {
+    return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}

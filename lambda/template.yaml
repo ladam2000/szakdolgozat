@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda function for AgentCore proxy
+
+Parameters:
+  AgentId:
+    Type: String
+    Description: Bedrock Agent ID
+    Default: ''
+  
+  AgentAliasId:
+    Type: String
+    Description: Bedrock Agent Alias ID
+    Default: ''
+
+Resources:
+  AgentCoreProxyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: travel-assistant-proxy
+      Runtime: python3.11
+      Handler: handler.lambda_handler
+      CodeUri: .
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          AGENT_ID: !Ref AgentId
+          AGENT_ALIAS_ID: !Ref AgentAliasId
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeAgent
+              Resource: '*'
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+  
+  FunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt AgentCoreProxyFunction.Arn
