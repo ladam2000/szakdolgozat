@@ -3,6 +3,17 @@ build/
 *.zip
 lambda-package.zip
 
+# Python packages (should be in build/ only)
+boto3/
+botocore/
+dateutil/
+jmespath/
+s3transfer/
+urllib3/
+*.dist-info/
+bin/
+six.py
+
 # Python
 __pycache__/
 *.py[cod]
