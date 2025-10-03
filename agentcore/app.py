@@ -15,15 +15,10 @@ from agentcore.guardrails import GuardrailsManager
 from agentcore.observability import ObservabilityManager
 
 # Strands imports
-from strands import BedrockModel
+from strands import Agent
 
 # Local imports
-from agents import (
-    create_flight_agent,
-    create_hotel_agent,
-    create_activity_agent,
-    create_coordinator_agent,
-)
+from agents import create_coordinator_agent
 
 
 app = FastAPI(title="Travel Assistant API")
@@ -51,8 +46,6 @@ class ChatResponse(BaseModel):
 
 
 # Global state
-bedrock_client = None
-model_client = None
 coordinator_agent = None
 memory_manager = None
 guardrails_manager = None
@@ -61,22 +54,15 @@ observability_manager = None
 
 def initialize_services():
     """Initialize AWS services and agents."""
-    global bedrock_client, model_client, coordinator_agent
-    global memory_manager, guardrails_manager, observability_manager
+    global coordinator_agent, memory_manager, guardrails_manager, observability_manager
     
     region = os.environ.get("AWS_REGION", "eu-central-1")
     model_id = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
     guardrail_id = os.environ.get("GUARDRAIL_ID")
     guardrail_version = os.environ.get("GUARDRAIL_VERSION", "DRAFT")
     
-    # Initialize Bedrock client
+    # Initialize Bedrock client for guardrails
     bedrock_client = boto3.client("bedrock-runtime", region_name=region)
-    
-    # Initialize model
-    model_client = BedrockModel(
-        model_id=model_id,
-        client=bedrock_client,
-    )
     
     # Initialize memory manager
     memory_manager = ShortTermMemory(max_messages=20)
@@ -95,16 +81,8 @@ def initialize_services():
         enable_tracing=True,
     )
     
-    # Create specialized agents
-    flight_agent = create_flight_agent(model_client)
-    hotel_agent = create_hotel_agent(model_client)
-    activity_agent = create_activity_agent(model_client)
-    
-    # Create coordinator agent
-    coordinator_agent = create_coordinator_agent(
-        model_client,
-        [flight_agent, hotel_agent, activity_agent],
-    )
+    # Create coordinator agent (Strands handles Bedrock internally)
+    coordinator_agent = create_coordinator_agent()
 
 
 @app.on_event("startup")
