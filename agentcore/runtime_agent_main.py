@@ -131,12 +131,26 @@ def flight_booking_tool(query: str) -> str:
     Args:
         query: Flight search request (origin, destination, dates, preferences)
     """
-    print(f"[FLIGHT AGENT] Processing: {query}", flush=True)
-    response = flight_agent(query)
-    # Extract text from Strands response
-    if hasattr(response, 'message') and 'content' in response.message:
-        return response.message['content'][0]['text']
-    return response.get("content", "") if isinstance(response, dict) else str(response)
+    try:
+        print(f"[FLIGHT AGENT] Processing: {query}", flush=True)
+        response = flight_agent(query)
+        print(f"[FLIGHT AGENT] Response type: {type(response)}", flush=True)
+        
+        # Extract text from Strands response
+        if hasattr(response, 'message') and 'content' in response.message:
+            result = response.message['content'][0]['text']
+        elif hasattr(response, 'content'):
+            result = response.content
+        elif isinstance(response, dict) and 'content' in response:
+            result = response['content']
+        else:
+            result = str(response)
+        
+        print(f"[FLIGHT AGENT] Returning: {len(result)} characters", flush=True)
+        return result
+    except Exception as e:
+        print(f"[FLIGHT AGENT] ERROR: {str(e)}", flush=True)
+        return f"Error searching flights: {str(e)}"
 
 
 @tool
@@ -146,12 +160,26 @@ def hotel_booking_tool(query: str) -> str:
     Args:
         query: Hotel search request (city, dates, preferences, budget)
     """
-    print(f"[HOTEL AGENT] Processing: {query}", flush=True)
-    response = hotel_agent(query)
-    # Extract text from Strands response
-    if hasattr(response, 'message') and 'content' in response.message:
-        return response.message['content'][0]['text']
-    return response.get("content", "") if isinstance(response, dict) else str(response)
+    try:
+        print(f"[HOTEL AGENT] Processing: {query}", flush=True)
+        response = hotel_agent(query)
+        print(f"[HOTEL AGENT] Response type: {type(response)}", flush=True)
+        
+        # Extract text from Strands response
+        if hasattr(response, 'message') and 'content' in response.message:
+            result = response.message['content'][0]['text']
+        elif hasattr(response, 'content'):
+            result = response.content
+        elif isinstance(response, dict) and 'content' in response:
+            result = response['content']
+        else:
+            result = str(response)
+        
+        print(f"[HOTEL AGENT] Returning: {len(result)} characters", flush=True)
+        return result
+    except Exception as e:
+        print(f"[HOTEL AGENT] ERROR: {str(e)}", flush=True)
+        return f"Error searching hotels: {str(e)}"
 
 
 @tool
@@ -161,12 +189,26 @@ def activities_tool(query: str) -> str:
     Args:
         query: Activities request (city, dates, interests, preferences)
     """
-    print(f"[ACTIVITIES AGENT] Processing: {query}", flush=True)
-    response = activities_agent(query)
-    # Extract text from Strands response
-    if hasattr(response, 'message') and 'content' in response.message:
-        return response.message['content'][0]['text']
-    return response.get("content", "") if isinstance(response, dict) else str(response)
+    try:
+        print(f"[ACTIVITIES AGENT] Processing: {query}", flush=True)
+        response = activities_agent(query)
+        print(f"[ACTIVITIES AGENT] Response type: {type(response)}", flush=True)
+        
+        # Extract text from Strands response
+        if hasattr(response, 'message') and 'content' in response.message:
+            result = response.message['content'][0]['text']
+        elif hasattr(response, 'content'):
+            result = response.content
+        elif isinstance(response, dict) and 'content' in response:
+            result = response['content']
+        else:
+            result = str(response)
+        
+        print(f"[ACTIVITIES AGENT] Returning: {len(result)} characters", flush=True)
+        return result
+    except Exception as e:
+        print(f"[ACTIVITIES AGENT] ERROR: {str(e)}", flush=True)
+        return f"Error searching activities: {str(e)}"
 
 
 # Create the orchestrator agent with specialized agents as tools
@@ -217,26 +259,47 @@ def travel_orchestrator_entrypoint(payload):
     Returns:
         String response from the orchestrator agent
     """
-    # Extract user input from payload
-    user_input = payload.get("input") or payload.get("prompt", "")
-    print(f"[ENTRYPOINT] User input: {user_input}", flush=True)
-    
-    # Invoke the orchestrator agent
-    response = agent(user_input)
-    print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
-    
-    # Extract text from response following AWS example pattern
-    if hasattr(response, 'message') and 'content' in response.message:
-        result = response.message['content'][0]['text']
-    elif hasattr(response, 'content'):
-        result = response.content
-    elif isinstance(response, dict) and 'content' in response:
-        result = response['content']
-    else:
-        result = str(response)
-    
-    print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
-    return result
+    try:
+        print(f"[ENTRYPOINT] Received payload: {payload}", flush=True)
+        
+        # Extract user input from payload
+        user_input = payload.get("input") or payload.get("prompt", "")
+        
+        if not user_input:
+            print("[ENTRYPOINT] WARNING: No input found in payload", flush=True)
+            return "Please provide a travel request in the 'input' or 'prompt' field."
+        
+        print(f"[ENTRYPOINT] User input: {user_input}", flush=True)
+        
+        # Invoke the orchestrator agent
+        print("[ENTRYPOINT] Invoking orchestrator agent...", flush=True)
+        response = agent(user_input)
+        print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
+        print(f"[ENTRYPOINT] Agent response: {response}", flush=True)
+        
+        # Extract text from response following AWS example pattern
+        if hasattr(response, 'message') and 'content' in response.message:
+            print("[ENTRYPOINT] Extracting from response.message['content']", flush=True)
+            result = response.message['content'][0]['text']
+        elif hasattr(response, 'content'):
+            print("[ENTRYPOINT] Extracting from response.content", flush=True)
+            result = response.content
+        elif isinstance(response, dict) and 'content' in response:
+            print("[ENTRYPOINT] Extracting from response['content']", flush=True)
+            result = response['content']
+        else:
+            print("[ENTRYPOINT] Converting response to string", flush=True)
+            result = str(response)
+        
+        print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
+        return result
+        
+    except Exception as e:
+        print(f"[ENTRYPOINT] ERROR: {type(e).__name__}: {str(e)}", flush=True)
+        import traceback
+        traceback.print_exc()
+        # Return error message instead of raising to avoid 500
+        return f"I apologize, but I encountered an error: {str(e)}"
 
 
 # Run the AgentCore app
