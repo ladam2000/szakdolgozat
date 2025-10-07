@@ -88,18 +88,38 @@ def initialize_services():
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup."""
-    initialize_services()
+    print("[STARTUP] Initializing AgentCore services...")
+    try:
+        initialize_services()
+        print("[STARTUP] Services initialized successfully")
+        print(f"[STARTUP] Coordinator agent: {coordinator_agent is not None}")
+        print(f"[STARTUP] Memory manager: {memory_manager is not None}")
+        print(f"[STARTUP] Guardrails manager: {guardrails_manager is not None}")
+        print(f"[STARTUP] Observability manager: {observability_manager is not None}")
+    except Exception as e:
+        print(f"[STARTUP] ERROR during initialization: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "travel-assistant"}
+    print("[HEALTH] Health check requested")
+    return {
+        "status": "healthy",
+        "service": "travel-assistant",
+        "agent_initialized": coordinator_agent is not None,
+        "memory_initialized": memory_manager is not None
+    }
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """Process chat message with multi-agent system."""
+    print(f"[CHAT] Received request - Session: {request.session_id}, Message: {request.message[:50]}...")
+    
     try:
         # Start observability trace
         with observability_manager.trace_request(
@@ -107,17 +127,24 @@ async def chat(request: ChatRequest):
             user_id=request.user_id,
         ) as trace:
             
+            print(f"[CHAT] Starting trace: {trace.trace_id}")
+            
             # Apply input guardrails
             if guardrails_manager:
+                print("[CHAT] Checking input guardrails...")
                 input_check = guardrails_manager.check_input(request.message)
                 if not input_check["allowed"]:
+                    print(f"[CHAT] Input blocked by guardrails: {input_check['reason']}")
                     raise HTTPException(
                         status_code=400,
                         detail=f"Input blocked by guardrails: {input_check['reason']}",
                     )
+                print("[CHAT] Input guardrails passed")
             
             # Retrieve conversation history
+            print(f"[CHAT] Retrieving conversation history...")
             history = memory_manager.get_history(request.session_id)
+            print(f"[CHAT] Found {len(history)} messages in history")
             
             # Build context with history
             context = "\n".join([
@@ -129,22 +156,38 @@ async def chat(request: ChatRequest):
             full_message = request.message
             if context:
                 full_message = f"Previous conversation:\n{context}\n\nUser: {request.message}"
+                print(f"[CHAT] Added context from {len(history[-5:])} previous messages")
             
             # Run coordinator agent
+            print(f"[CHAT] Invoking coordinator agent...")
             trace.log("Running coordinator agent")
-            response = coordinator_agent.run(full_message)
+            
+            try:
+                response = coordinator_agent.run(full_message)
+                print(f"[CHAT] Agent response received: {len(response.content) if hasattr(response, 'content') else 'unknown'} characters")
+            except Exception as agent_error:
+                print(f"[CHAT] ERROR in agent execution: {str(agent_error)}")
+                import traceback
+                traceback.print_exc()
+                raise
             
             # Apply output guardrails
             if guardrails_manager:
+                print("[CHAT] Checking output guardrails...")
                 output_check = guardrails_manager.check_output(response.content)
                 if not output_check["allowed"]:
                     response_text = "I apologize, but I cannot provide that response."
+                    print(f"[CHAT] Output blocked by guardrails")
                 else:
                     response_text = response.content
+                    print("[CHAT] Output guardrails passed")
             else:
                 response_text = response.content
             
+            print(f"[CHAT] Final response length: {len(response_text)} characters")
+            
             # Store in memory
+            print("[CHAT] Storing messages in memory...")
             memory_manager.add_message(
                 session_id=request.session_id,
                 role="user",
@@ -162,6 +205,8 @@ async def chat(request: ChatRequest):
                 "history_size": len(history),
             })
             
+            print(f"[CHAT] Request completed successfully")
+            
             return ChatResponse(
                 response=response_text,
                 session_id=request.session_id,
@@ -171,7 +216,13 @@ async def chat(request: ChatRequest):
                 },
             )
     
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"[CHAT] ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
         if observability_manager:
             observability_manager.log_error(str(e))
         raise HTTPException(status_code=500, detail=str(e))

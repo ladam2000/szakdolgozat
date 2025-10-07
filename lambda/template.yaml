@@ -41,8 +41,8 @@ Resources:
       Runtime: python3.11
       Handler: handler.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 60
-      MemorySize: 256
+      Timeout: 300
+      MemorySize: 512
       Environment:
         Variables:
           AGENT_RUNTIME_ARN: !Ref AgentRuntimeArn
@@ -56,74 +56,37 @@ Resources:
                   'body': json.dumps({'message': 'Placeholder'})
               }
 
-  # Lambda Permission for API Gateway
-  LambdaApiGatewayPermission:
-    Type: AWS::Lambda::Permission
+  # Lambda Function URL (supports streaming, no 29s timeout)
+  LambdaFunctionUrl:
+    Type: AWS::Lambda::Url
     Properties:
-      FunctionName: !Ref AgentCoreProxyFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
-
-  # API Gateway
-  ApiGateway:
-    Type: AWS::ApiGatewayV2::Api
-    Properties:
-      Name: travel-assistant-api
-      ProtocolType: HTTP
-      CorsConfiguration:
+      AuthType: NONE
+      TargetFunctionArn: !GetAtt AgentCoreProxyFunction.Arn
+      Cors:
         AllowOrigins:
           - '*'
         AllowMethods:
           - GET
           - POST
-          - OPTIONS
+          - PUT
+          - DELETE
         AllowHeaders:
           - '*'
+        MaxAge: 300
 
-  # API Gateway Integration
-  ApiIntegration:
-    Type: AWS::ApiGatewayV2::Integration
+  # Lambda Permission for Function URL
+  LambdaFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
     Properties:
-      ApiId: !Ref ApiGateway
-      IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt AgentCoreProxyFunction.Arn
-      PayloadFormatVersion: '2.0'
-
-  # API Gateway Routes
-  ChatRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref ApiGateway
-      RouteKey: 'POST /chat'
-      Target: !Sub 'integrations/${ApiIntegration}'
-  
-  HealthRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref ApiGateway
-      RouteKey: 'GET /health'
-      Target: !Sub 'integrations/${ApiIntegration}'
-  
-  OptionsRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref ApiGateway
-      RouteKey: 'OPTIONS /{proxy+}'
-      Target: !Sub 'integrations/${ApiIntegration}'
-
-  # API Gateway Stage
-  ApiStage:
-    Type: AWS::ApiGatewayV2::Stage
-    Properties:
-      ApiId: !Ref ApiGateway
-      StageName: prod
-      AutoDeploy: true
+      FunctionName: !Ref AgentCoreProxyFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
 
 Outputs:
   ApiUrl:
-    Description: API Gateway endpoint URL
-    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Description: Lambda Function URL
+    Value: !GetAtt LambdaFunctionUrl.FunctionUrl
   
   FunctionName:
     Description: Lambda Function Name

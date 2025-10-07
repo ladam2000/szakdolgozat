@@ -13,7 +13,7 @@ agent_core_client = boto3.client('bedrock-agentcore')
 AGENT_RUNTIME_ARN = os.environ.get("AGENT_RUNTIME_ARN")
 
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def lambda_handler(event: Dict[str, Any], context: Any):
     """Handle API Gateway requests and invoke AgentCore Runtime.
     
     Based on: https://github.com/marklaszlo9/agentcore-sample/blob/main/lambda/agentcore_proxy.py
@@ -26,7 +26,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         API Gateway response
     """
     # Handle CORS preflight
-    if event.get('requestContext', {}).get('http', {}).get('method') == 'OPTIONS':
+    request_context = event.get('requestContext', {})
+    http_method = request_context.get('http', {}).get('method', event.get('httpMethod', ''))
+    
+    if http_method == 'OPTIONS':
         return create_response(200, {})
     
     try:
@@ -57,15 +60,24 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             payload=payload
         )
         
-        # Parse response - it's a streaming response
+        # Parse response - handle streaming
         result = ""
-        if 'body' in response:
-            # Read the streaming body
-            for chunk in response['body']:
-                if 'chunk' in chunk:
-                    result += chunk['chunk'].decode('utf-8')
-        else:
-            result = response.get('output', '')
+        
+        # The response body is an EventStream
+        event_stream = response.get('body')
+        if event_stream:
+            for event_data in event_stream:
+                # Handle different event types
+                if 'chunk' in event_data:
+                    chunk_bytes = event_data['chunk'].get('bytes', b'')
+                    if chunk_bytes:
+                        result += chunk_bytes.decode('utf-8')
+                elif 'internalServerException' in event_data:
+                    raise Exception(f"Internal server error: {event_data['internalServerException']}")
+                elif 'throttlingException' in event_data:
+                    raise Exception(f"Throttling error: {event_data['throttlingException']}")
+        
+        print(f"Response received: {len(result)} characters")
         
         return create_response(200, {
             "response": result,

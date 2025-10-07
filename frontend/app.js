@@ -1,7 +1,7 @@
 import { userManager, signOutRedirect, getUser, isAuthenticated } from './auth.js';
 
 // Configuration - Replace with your API Gateway URL after deployment
-const API_URL = 'https://z7t3jpndjk.execute-api.eu-central-1.amazonaws.com/prod';
+const API_URL = 'https://fbiwuqkkwu6yqutfmr25anrnuy0hwfnl.lambda-url.eu-central-1.on.aws/';
 
 // Global state
 let currentUser = null;
