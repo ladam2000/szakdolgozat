@@ -1,6 +1,6 @@
 """Travel agent system with orchestrator and specialized agents as tools."""
 
-from strands import Agent
+from strands import Agent, tool
 import json
 
 
@@ -137,6 +137,7 @@ def get_activities_agent():
 
 
 # Convert agents to tools for the orchestrator
+@tool
 def flight_booking_tool(query: str) -> str:
     """Search and book flights.
     
@@ -149,6 +150,7 @@ def flight_booking_tool(query: str) -> str:
     return response.get("content", "") if isinstance(response, dict) else str(response)
 
 
+@tool
 def hotel_booking_tool(query: str) -> str:
     """Search and book hotels.
     
@@ -161,6 +163,7 @@ def hotel_booking_tool(query: str) -> str:
     return response.get("content", "") if isinstance(response, dict) else str(response)
 
 
+@tool
 def activities_tool(query: str) -> str:
     """Find activities and attractions.
     

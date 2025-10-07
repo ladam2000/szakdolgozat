@@ -101,12 +101,15 @@ Specialized agents provide more detailed, contextual information than generic to
 
 ### runtime_agent_main.py (AgentCore Entry Point)
 ```python
+from strands import Agent, tool
+
 # Create specialized agents
 flight_agent = create_flight_agent()
 hotel_agent = create_hotel_agent()
 activities_agent = create_activities_agent()
 
-# Wrap agents as tools
+# Wrap agents as tools (MUST use @tool decorator)
+@tool
 def flight_booking_tool(query: str) -> str:
     response = flight_agent(query)
     return response.content
@@ -118,6 +121,8 @@ agent = Agent(
     tools=[flight_booking_tool, hotel_booking_tool, activities_tool],
 )
 ```
+
+**Important**: Tool functions MUST be decorated with `@tool` from Strands, otherwise you'll get "unrecognized tool specification" errors.
 
 ### Key Pattern
 1. Create specialized Agent instances
@@ -140,10 +145,11 @@ def create_car_rental_agent() -> Agent:
     return agent
 ```
 
-2. **Wrap as a tool**:
+2. **Wrap as a tool** (with @tool decorator):
 ```python
 car_rental_agent = create_car_rental_agent()
 
+@tool
 def car_rental_tool(query: str) -> str:
     """Search for car rentals."""
     response = car_rental_agent(query)

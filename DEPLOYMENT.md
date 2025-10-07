@@ -2,11 +2,12 @@
 
 ## What Changed
 
-The travel agent system has been updated to use the **agents-as-tools** pattern:
+The travel agent system has been updated to use the **agents-as-tools** pattern following AWS best practices:
 
 ### Before:
 - Single agent with 3 tool functions (`search_flights`, `search_hotels`, `search_activities`)
 - Tools returned mock JSON data directly
+- No proper AgentCore integration
 
 ### After:
 - **Orchestrator Agent** (Claude Sonnet) coordinates the workflow
@@ -15,14 +16,22 @@ The travel agent system has been updated to use the **agents-as-tools** pattern:
   - `HotelBookingAgent` - Handles hotel searches
   - `ActivitiesAgent` - Handles activities and itineraries
 - Each specialized agent is a full Strands Agent with its own system prompt
+- **Proper AgentCore integration** using `BedrockAgentCoreApp` and `@app.entrypoint`
+- Follows [AWS AgentCore samples pattern](https://github.com/awslabs/amazon-bedrock-agentcore-samples)
 
 ## Files Updated
 
-1. **`agentcore/runtime_agent_main.py`** - AgentCore runtime entry point (CRITICAL - this is what AgentCore runs)
-2. `agentcore/agents.py` - Main implementation with orchestrator pattern
-3. `agentcore/agent.py` - Standalone version (for reference)
-4. `agentcore/app.py` - Updated to handle new response format (if using FastAPI)
-5. `README.md` - Updated architecture documentation
+1. **`agentcore/runtime_agent_main.py`** ⭐ - AgentCore runtime entry point (CRITICAL)
+   - Implements `BedrockAgentCoreApp` pattern
+   - Uses `@app.entrypoint` decorator
+   - Proper response extraction with `response.message['content'][0]['text']`
+   - Follows AWS official example pattern
+2. **`agentcore/requirements.txt`** - Added `bedrock-agentcore` dependency
+3. `agentcore/agents.py` - Main implementation with orchestrator pattern
+4. `agentcore/agent.py` - Standalone version (for reference)
+5. `agentcore/app.py` - Updated to handle new response format (if using FastAPI)
+6. `README.md` - Updated architecture documentation
+7. `AWS_PATTERN_COMPARISON.md` - Detailed comparison with AWS example
 
 **Note**: AgentCore uses `runtime_agent_main.py` as the entry point, not `app.py`.
 
@@ -172,6 +181,22 @@ aws bedrock list-foundation-models --region us-east-1 \
 ```bash
 docker exec -it <container-id> pip list | grep strands
 ```
+
+### Issue: "unrecognized tool specification" error
+**Cause**: Tool functions are not decorated with `@tool`.
+
+**Solution**: Ensure all tool functions have the `@tool` decorator:
+```python
+from strands import Agent, tool
+
+@tool  # This is required!
+def flight_booking_tool(query: str) -> str:
+    """Search and book flights."""
+    response = flight_agent(query)
+    return response.content
+```
+
+Without `@tool`, Strands cannot recognize the function as a valid tool.
 
 ## Architecture Benefits
 

@@ -1,12 +1,16 @@
 """AgentCore runtime main entry point with orchestrator pattern."""
 
 import sys
-from strands import Agent
+from strands import Agent, tool
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
 import json
 
 # Ensure prints are flushed immediately
 sys.stdout.flush()
 print("[STARTUP] Initializing orchestrator agent system...", flush=True)
+
+# Create the AgentCore app
+app = BedrockAgentCoreApp()
 
 
 # Specialized Agent 1: Flight Booking Agent
@@ -120,6 +124,7 @@ print("[AGENT] Specialized agents created", flush=True)
 
 
 # Convert agents to tools for the orchestrator
+@tool
 def flight_booking_tool(query: str) -> str:
     """Search and book flights.
     
@@ -128,9 +133,13 @@ def flight_booking_tool(query: str) -> str:
     """
     print(f"[FLIGHT AGENT] Processing: {query}", flush=True)
     response = flight_agent(query)
+    # Extract text from Strands response
+    if hasattr(response, 'message') and 'content' in response.message:
+        return response.message['content'][0]['text']
     return response.get("content", "") if isinstance(response, dict) else str(response)
 
 
+@tool
 def hotel_booking_tool(query: str) -> str:
     """Search and book hotels.
     
@@ -139,9 +148,13 @@ def hotel_booking_tool(query: str) -> str:
     """
     print(f"[HOTEL AGENT] Processing: {query}", flush=True)
     response = hotel_agent(query)
+    # Extract text from Strands response
+    if hasattr(response, 'message') and 'content' in response.message:
+        return response.message['content'][0]['text']
     return response.get("content", "") if isinstance(response, dict) else str(response)
 
 
+@tool
 def activities_tool(query: str) -> str:
     """Find activities and attractions.
     
@@ -150,6 +163,9 @@ def activities_tool(query: str) -> str:
     """
     print(f"[ACTIVITIES AGENT] Processing: {query}", flush=True)
     response = activities_agent(query)
+    # Extract text from Strands response
+    if hasattr(response, 'message') and 'content' in response.message:
+        return response.message['content'][0]['text']
     return response.get("content", "") if isinstance(response, dict) else str(response)
 
 
@@ -188,11 +204,42 @@ print(f"[AGENT] Agent name: {agent.name}", flush=True)
 print(f"[AGENT] Specialized agents: FlightBookingAgent, HotelBookingAgent, ActivitiesAgent", flush=True)
 print(f"[AGENT] Tools: {[tool.__name__ for tool in [flight_booking_tool, hotel_booking_tool, activities_tool]]}", flush=True)
 
-# Keep the process running so AgentCore can invoke the agent
+
+# Define the entrypoint for AgentCore
+@app.entrypoint
+def travel_orchestrator_entrypoint(payload):
+    """
+    AgentCore entrypoint for the travel orchestrator.
+    
+    Args:
+        payload: Dictionary with user input (expects 'input' or 'prompt' key)
+    
+    Returns:
+        String response from the orchestrator agent
+    """
+    # Extract user input from payload
+    user_input = payload.get("input") or payload.get("prompt", "")
+    print(f"[ENTRYPOINT] User input: {user_input}", flush=True)
+    
+    # Invoke the orchestrator agent
+    response = agent(user_input)
+    print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
+    
+    # Extract text from response following AWS example pattern
+    if hasattr(response, 'message') and 'content' in response.message:
+        result = response.message['content'][0]['text']
+    elif hasattr(response, 'content'):
+        result = response.content
+    elif isinstance(response, dict) and 'content' in response:
+        result = response['content']
+    else:
+        result = str(response)
+    
+    print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
+    return result
+
+
+# Run the AgentCore app
 if __name__ == "__main__":
-    import time
-    print("[RUNTIME] Agent ready and waiting for invocations...", flush=True)
-    print("[RUNTIME] Container will stay alive for AgentCore to invoke", flush=True)
-    while True:
-        time.sleep(60)
-        print("[RUNTIME] Still alive...", flush=True)
+    print("[RUNTIME] Starting AgentCore app...", flush=True)
+    app.run()
