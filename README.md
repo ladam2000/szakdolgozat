@@ -11,7 +11,7 @@ This system implements the agents-as-tools pattern where:
   - Hotel Booking Agent - Finds and compares hotels
   - Activities Agent - Suggests attractions and itineraries
 
-The orchestrator uses Claude Sonnet for intelligent coordination, while specialized agents use Nova Micro for efficient task execution.
+All agents use **Nova Micro** (`us.amazon.nova-micro-v1:0`) for fast, cost-effective execution.
 
 ## Key Features
 
@@ -48,4 +48,4 @@ The orchestrator uses Claude Sonnet for intelligent coordination, while speciali
 ## Environment Variables
 
 - `AWS_REGION` - AWS region (default: eu-central-1)
-- `BEDROCK_MODEL_ID` - Bedrock model for orchestrator (default: us.anthropic.claude-sonnet-4-20250514-v1:0)
+- `BEDROCK_MODEL_ID` - Bedrock model for all agents (default: us.amazon.nova-micro-v1:0)

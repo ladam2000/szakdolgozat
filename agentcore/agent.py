@@ -153,7 +153,7 @@ def activities_tool(query: str) -> str:
 print("[AGENT] Creating travel orchestrator agent...")
 agent = Agent(
     name="TravelOrchestrator",
-    model="us.anthropic.claude-sonnet-4-20250514-v1:0",
+    model="us.amazon.nova-micro-v1:0",  # Using Nova Micro for all agents
     tools=[flight_booking_tool, hotel_booking_tool, activities_tool],
 )
 
