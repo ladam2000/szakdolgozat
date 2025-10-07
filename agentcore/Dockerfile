@@ -12,5 +12,5 @@ COPY runtime_agent_main.py .
 # Expose port
 EXPOSE 8000
 
-# Run with OpenTelemetry instrumentation
+# Keep container running - AgentCore will invoke the agent
 CMD ["opentelemetry-instrument", "python", "runtime_agent_main.py"]

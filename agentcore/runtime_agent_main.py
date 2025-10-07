@@ -1,6 +1,5 @@
 """AgentCore runtime main entry point."""
 
-import os
 from strands import Agent, tool
 import json
 
@@ -55,8 +54,9 @@ def search_activities(city: str, date: str) -> str:
     return json.dumps(activities)
 
 
-# Create the agent
+# Create and export the agent
 print("[AGENT] Creating travel coordinator agent...")
+
 agent = Agent(
     name="TravelCoordinator",
     tools=[search_flights, search_hotels, search_activities],
@@ -72,10 +72,11 @@ Help users plan their trips by:
 Ask clarifying questions when needed (origin, destination, dates, etc).
 Provide comprehensive travel plans with all the information."""
 
-print("[AGENT] Agent created successfully")
+print("[AGENT] Agent created and ready")
 
-# Start the agent runtime
+# Keep the process running so AgentCore can invoke the agent
 if __name__ == "__main__":
-    print("[RUNTIME] Starting AgentCore runtime...")
-    port = int(os.environ.get("PORT", 8000))
-    agent.serve(host="0.0.0.0", port=port)
+    import time
+    print("[RUNTIME] Agent ready and waiting for invocations...")
+    while True:
+        time.sleep(60)
