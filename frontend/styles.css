@@ -236,3 +236,51 @@ button.secondary:hover {
 .messages::-webkit-scrollbar-thumb:hover {
     background: #868e96;
 }
+
+/* Markdown formatting in messages */
+.message h1, .message h2, .message h3 {
+    margin: 12px 0 8px 0;
+    font-weight: 600;
+}
+
+.message h1 {
+    font-size: 1.5rem;
+    color: #667eea;
+}
+
+.message h2 {
+    font-size: 1.3rem;
+    color: #667eea;
+}
+
+.message h3 {
+    font-size: 1.1rem;
+    color: #667eea;
+}
+
+.message ul {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.message li {
+    margin: 4px 0;
+    line-height: 1.6;
+}
+
+.message strong {
+    font-weight: 600;
+    color: #495057;
+}
+
+.message em {
+    font-style: italic;
+}
+
+.message code {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}

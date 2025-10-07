@@ -110,7 +110,8 @@ async function sendMessage() {
         const loadingId = addLoadingMessage();
         
         // Send to API with auth token
-        const response = await fetch(`${API_URL}/chat`, {
+        // Lambda Function URL doesn't support paths, send directly
+        const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -151,15 +152,18 @@ async function resetSession() {
     }
     
     try {
-        await fetch(`${API_URL}/reset`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                session_id: sessionId,
-            }),
-        });
+        // For reset, just generate new session ID locally
+        // Lambda Function URL doesn't support routing
+        // await fetch(API_URL, {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //     },
+        //     body: JSON.stringify({
+        //         session_id: sessionId,
+        //         reset: true,
+        //     }),
+        // });
         
         // Clear messages
         messagesContainer.innerHTML = '';
@@ -179,7 +183,28 @@ async function resetSession() {
 function addMessage(text, type) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
-    messageDiv.textContent = text;
+    
+    // Convert markdown to HTML
+    let formattedText = text
+        // Headings (must be done before newlines)
+        .replace(/^### (.*?)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
+        // Lists (must be done before newlines)
+        .replace(/^- (.*?)$/gm, '<li>$1</li>')
+        // Bold and italic
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        // Code
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        // Convert remaining newlines to <br>
+        .replace(/\n/g, '<br>');
+    
+    // Wrap consecutive <li> elements in <ul>
+    formattedText = formattedText.replace(/(<li>.*?<\/li>)(<br>)?(?=<li>|$)/g, '$1');
+    formattedText = formattedText.replace(/(<li>.*?<\/li>)+/g, '<ul>$&</ul>');
+    
+    messageDiv.innerHTML = formattedText;
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
     return messageDiv.id = generateId();
