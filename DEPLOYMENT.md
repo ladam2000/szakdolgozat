@@ -18,10 +18,31 @@ The travel agent system has been updated to use the **agents-as-tools** pattern:
 
 ## Files Updated
 
-1. `agentcore/agents.py` - Main implementation with orchestrator pattern
-2. `agentcore/agent.py` - Standalone version (for reference)
-3. `agentcore/app.py` - Updated to handle new response format
-4. `README.md` - Updated architecture documentation
+1. **`agentcore/runtime_agent_main.py`** - AgentCore runtime entry point (CRITICAL - this is what AgentCore runs)
+2. `agentcore/agents.py` - Main implementation with orchestrator pattern
+3. `agentcore/agent.py` - Standalone version (for reference)
+4. `agentcore/app.py` - Updated to handle new response format (if using FastAPI)
+5. `README.md` - Updated architecture documentation
+
+**Note**: AgentCore uses `runtime_agent_main.py` as the entry point, not `app.py`.
+
+## Local Testing (Optional but Recommended)
+
+Before deploying, test the orchestrator locally:
+
+```bash
+# Install dependencies
+pip install strands-agent boto3
+
+# Run test script
+python test_orchestrator.py
+```
+
+This will verify:
+- Agent creation works
+- Specialized agents are properly configured
+- Tool calls execute correctly
+- Models are accessible
 
 ## How to Deploy
 
@@ -87,13 +108,19 @@ Expected behavior:
 
 After deployment, you should see:
 ```
+[STARTUP] Initializing orchestrator agent system...
+[AGENT] Creating specialized agents...
+[AGENT] Specialized agents created
 [AGENT] Creating travel orchestrator agent...
-[AGENT] Orchestrator agent created successfully with 3 specialized agents as tools
+[AGENT] Orchestrator agent created successfully!
+[AGENT] Agent name: TravelOrchestrator
+[AGENT] Specialized agents: FlightBookingAgent, HotelBookingAgent, ActivitiesAgent
+[AGENT] Tools: ['flight_booking_tool', 'hotel_booking_tool', 'activities_tool']
+[RUNTIME] Agent ready and waiting for invocations...
 ```
 
 When processing requests:
 ```
-[CHAT] Invoking coordinator agent...
 [FLIGHT AGENT] Processing: <query>
 [HOTEL AGENT] Processing: <query>
 [ACTIVITIES AGENT] Processing: <query>
@@ -101,8 +128,21 @@ When processing requests:
 
 ## Troubleshooting
 
+### Issue: Runtime health check failed or timed out
+**Cause**: AgentCore couldn't load the agent properly.
+
+**Solutions**:
+1. Check that `runtime_agent_main.py` exports an `agent` variable at module level
+2. Verify all required models are available in your region
+3. Check CloudWatch logs for initialization errors
+4. Ensure the container has proper IAM permissions for Bedrock
+
 ### Issue: Still seeing old agent logs
-**Solution**: Container is running old code. Rebuild and redeploy.
+**Solution**: Container is running old code. Rebuild and redeploy:
+```bash
+# Force rebuild without cache
+docker build --no-cache -t travel-agent-agentcore ./agentcore
+```
 
 ### Issue: Agent not responding
 **Solution**: Check that Claude Sonnet model is available in your region:
@@ -111,11 +151,26 @@ aws bedrock list-foundation-models --region us-east-1 \
   --query "modelSummaries[?contains(modelId, 'claude-sonnet')]"
 ```
 
+If not available, change the orchestrator model in `runtime_agent_main.py`:
+```python
+# Option 1: Use Claude Haiku (cheaper, faster)
+model="us.anthropic.claude-3-5-haiku-20241022-v1:0"
+
+# Option 2: Use Nova Pro (AWS native)
+model="us.amazon.nova-pro-v1:0"
+```
+
 ### Issue: Tool calls failing
 **Solution**: Check that Nova Micro is available for specialized agents:
 ```bash
 aws bedrock list-foundation-models --region us-east-1 \
   --query "modelSummaries[?contains(modelId, 'nova-micro')]"
+```
+
+### Issue: Import errors
+**Solution**: Verify Strands is installed in the container:
+```bash
+docker exec -it <container-id> pip list | grep strands
 ```
 
 ## Architecture Benefits
