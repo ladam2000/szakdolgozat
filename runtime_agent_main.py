@@ -143,8 +143,8 @@ class AgentCoreRuntime:
         self.multi_agent_orchestrator = None
 
         # Get configuration from environment
-        self.model_id = os.environ.get("MODEL_ID", "us.amazon.nova-micro-v1:0")
-        self.region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        self.model_id = os.environ.get("MODEL_ID", "eu.amazon.nova-micro-v1:0")
+        self.region = os.environ.get("AWS_DEFAULT_REGION", "eu-central-1")
         self.knowledge_base_id = os.environ.get("KNOWLEDGE_BASE_ID")
         self.memory_id = os.environ.get("AGENTCORE_MEMORY_ID")
         self.use_multi_agent = (
