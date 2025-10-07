@@ -7,10 +7,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy agent code
-COPY agent.py .
+COPY runtime_agent_main.py .
 
 # Expose port
 EXPOSE 8000
 
-# Run with Strands agent
-CMD ["python", "-m", "strands.serve", "agent:agent", "--host", "0.0.0.0", "--port", "8000"]
+# Run with OpenTelemetry instrumentation
+CMD ["opentelemetry-instrument", "python", "runtime_agent_main.py"]
