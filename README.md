@@ -11,7 +11,7 @@ This system implements the agents-as-tools pattern where:
   - Hotel Booking Agent - Finds and compares hotels
   - Activities Agent - Suggests attractions and itineraries
 
-All agents use **Llama 3.2 1B Instruct** (`eu.meta.llama3-2-1b-instruct-v1:0`) for fast, efficient execution.
+All agents use **Amazon Nova Micro** (`eu.amazon.nova-micro-v1:0`) for fast, cost-effective execution.
 
 ## Key Features
 
@@ -48,4 +48,4 @@ All agents use **Llama 3.2 1B Instruct** (`eu.meta.llama3-2-1b-instruct-v1:0`) f
 ## Environment Variables
 
 - `AWS_REGION` - AWS region (default: eu-central-1)
-- `BEDROCK_MODEL_ID` - Bedrock model for all agents (default: eu.meta.llama3-2-1b-instruct-v1:0)
+- `BEDROCK_MODEL_ID` - Bedrock model for all agents (default: eu.amazon.nova-micro-v1:0)

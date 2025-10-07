@@ -9,7 +9,7 @@ def create_flight_agent() -> Agent:
     """Create specialized agent for flight bookings."""
     agent = Agent(
         name="FlightBookingAgent",
-        model="amazon.nova-micro-v1:0",
+        model="eu.amazon.nova-micro-v1:0",
     )
     
     agent.system_prompt = """You are a flight booking specialist.
@@ -43,7 +43,7 @@ def create_hotel_agent() -> Agent:
     """Create specialized agent for hotel bookings."""
     agent = Agent(
         name="HotelBookingAgent",
-        model="amazon.nova-micro-v1:0",
+        model="eu.amazon.nova-micro-v1:0",
     )
     
     agent.system_prompt = """You are a hotel booking specialist.
@@ -77,7 +77,7 @@ def create_activities_agent() -> Agent:
     """Create specialized agent for activities and attractions."""
     agent = Agent(
         name="ActivitiesAgent",
-        model="amazon.nova-micro-v1:0",
+        model="eu.amazon.nova-micro-v1:0",
     )
     
     agent.system_prompt = """You are a local activities and attractions specialist.
@@ -153,7 +153,7 @@ def activities_tool(query: str) -> str:
 print("[AGENT] Creating travel orchestrator agent...")
 agent = Agent(
     name="TravelOrchestrator",
-    model="amazon.nova-micro-v1:0",
+    model="eu.amazon.nova-micro-v1:0",
     tools=[flight_booking_tool, hotel_booking_tool, activities_tool],
 )
 
