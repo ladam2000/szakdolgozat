@@ -32,7 +32,8 @@ All agents use **Amazon Nova Micro** (`eu.amazon.nova-micro-v1:0`) for fast, cos
 │   └── auth.js                # AWS Cognito authentication
 ├── infrastructure/
 │   └── template.yaml          # Main CloudFormation template
-├── deploy-frontend.sh         # Frontend deployment script
+├── buildspec.yml              # CodeBuild configuration for AgentCore
+├── deploy-frontend.sh         # Deployment script
 └── README.md                  # This file
 ```
 

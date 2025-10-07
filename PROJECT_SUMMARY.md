@@ -31,7 +31,8 @@ User → Frontend → Lambda → AgentCore → Orchestrator Agent
 │   └── auth.js                # AWS Cognito authentication
 ├── infrastructure/
 │   └── template.yaml          # Main CloudFormation template
-├── deploy-frontend.sh         # Frontend deployment script
+├── buildspec.yml              # CodeBuild configuration for AgentCore
+├── deploy-frontend.sh         # Deployment script
 └── README.md                  # Documentation
 ```
 
