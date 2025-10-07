@@ -1,7 +1,12 @@
 """AgentCore runtime main entry point."""
 
+import sys
 from strands import Agent, tool
 import json
+
+# Ensure prints are flushed immediately
+sys.stdout.flush()
+print("[STARTUP] Initializing agent...", flush=True)
 
 
 @tool
@@ -55,12 +60,14 @@ def search_activities(city: str, date: str) -> str:
 
 
 # Create and export the agent
-print("[AGENT] Creating travel coordinator agent...")
+print("[AGENT] Creating travel coordinator agent...", flush=True)
 
 agent = Agent(
     name="TravelCoordinator",
     tools=[search_flights, search_hotels, search_activities],
 )
+
+print("[AGENT] Setting system prompt...", flush=True)
 
 agent.system_prompt = """You are a helpful travel planning assistant.
 
@@ -72,11 +79,15 @@ Help users plan their trips by:
 Ask clarifying questions when needed (origin, destination, dates, etc).
 Provide comprehensive travel plans with all the information."""
 
-print("[AGENT] Agent created and ready")
+print("[AGENT] Agent created and ready!", flush=True)
+print(f"[AGENT] Agent name: {agent.name}", flush=True)
+print(f"[AGENT] Tools: {[tool.__name__ for tool in [search_flights, search_hotels, search_activities]]}", flush=True)
 
 # Keep the process running so AgentCore can invoke the agent
 if __name__ == "__main__":
     import time
-    print("[RUNTIME] Agent ready and waiting for invocations...")
+    print("[RUNTIME] Agent ready and waiting for invocations...", flush=True)
+    print("[RUNTIME] Container will stay alive for AgentCore to invoke", flush=True)
     while True:
         time.sleep(60)
+        print("[RUNTIME] Still alive...", flush=True)
