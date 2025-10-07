@@ -163,8 +163,19 @@ async def chat(request: ChatRequest):
             trace.log("Running coordinator agent")
             
             try:
-                response = coordinator_agent.run(full_message)
-                print(f"[CHAT] Agent response received: {len(response.content) if hasattr(response, 'content') else 'unknown'} characters")
+                response = coordinator_agent(full_message)
+                print(f"[CHAT] Agent response type: {type(response)}")
+                print(f"[CHAT] Agent response: {response}")
+                
+                # Handle different response types
+                if hasattr(response, 'content'):
+                    response_content = response.content
+                elif isinstance(response, dict) and 'content' in response:
+                    response_content = response['content']
+                else:
+                    response_content = str(response)
+                    
+                print(f"[CHAT] Agent response received: {len(response_content)} characters")
             except Exception as agent_error:
                 print(f"[CHAT] ERROR in agent execution: {str(agent_error)}")
                 import traceback
@@ -174,15 +185,15 @@ async def chat(request: ChatRequest):
             # Apply output guardrails
             if guardrails_manager:
                 print("[CHAT] Checking output guardrails...")
-                output_check = guardrails_manager.check_output(response.content)
+                output_check = guardrails_manager.check_output(response_content)
                 if not output_check["allowed"]:
                     response_text = "I apologize, but I cannot provide that response."
                     print(f"[CHAT] Output blocked by guardrails")
                 else:
-                    response_text = response.content
+                    response_text = response_content
                     print("[CHAT] Output guardrails passed")
             else:
-                response_text = response.content
+                response_text = response_content
             
             print(f"[CHAT] Final response length: {len(response_text)} characters")
             
@@ -212,7 +223,8 @@ async def chat(request: ChatRequest):
                 session_id=request.session_id,
                 metadata={
                     "trace_id": trace.trace_id,
-                    "agent": "TravelCoordinator",
+                    "agent": "TravelOrchestrator",
+                    "specialized_agents": ["FlightBookingAgent", "HotelBookingAgent", "ActivitiesAgent"],
                 },
             )
     

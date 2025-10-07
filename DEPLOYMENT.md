@@ -1,241 +1,127 @@
-# Deployment Guide - Bedrock AgentCore
+# Deployment Guide - Orchestrator Pattern Update
 
-## Architecture
+## What Changed
 
-This solution uses **AWS Bedrock AgentCore** to host a custom Strands agent in a Docker container.
+The travel agent system has been updated to use the **agents-as-tools** pattern:
 
-**Components:**
-1. **AgentCore** - AWS managed service that runs your Docker container with the agent
-2. **Lambda** - Proxy that calls `bedrock-agent-runtime.invoke_agent()`
-3. **ECR** - Stores the Docker image with your agent code
-4. **API Gateway** - REST API for frontend
-5. **CloudFront + S3** - Static frontend hosting
+### Before:
+- Single agent with 3 tool functions (`search_flights`, `search_hotels`, `search_activities`)
+- Tools returned mock JSON data directly
 
-## Prerequisites
+### After:
+- **Orchestrator Agent** (Claude Sonnet) coordinates the workflow
+- **3 Specialized Agents** (Nova Micro) act as tools:
+  - `FlightBookingAgent` - Handles flight searches
+  - `HotelBookingAgent` - Handles hotel searches
+  - `ActivitiesAgent` - Handles activities and itineraries
+- Each specialized agent is a full Strands Agent with its own system prompt
 
-- AWS CLI configured with credentials
-- AWS account with Bedrock access in eu-central-1
-- Docker installed locally (for testing)
-- Bedrock AgentCore enabled in your account
+## Files Updated
 
-## Deployment Steps
+1. `agentcore/agents.py` - Main implementation with orchestrator pattern
+2. `agentcore/agent.py` - Standalone version (for reference)
+3. `agentcore/app.py` - Updated to handle new response format
+4. `README.md` - Updated architecture documentation
 
-### 1. Deploy Infrastructure
+## How to Deploy
 
+### Option 1: Rebuild Container (Recommended)
 ```bash
-chmod +x deploy.sh
-./deploy.sh
+# Rebuild the AgentCore container
+docker build -t travel-agent-agentcore ./agentcore
+
+# Or trigger CodeBuild if using AWS
+aws codebuild start-build --project-name travel-assistant-build
 ```
 
-This creates:
-- S3 buckets (frontend + artifacts)
-- ECR repository
-- Lambda function
-- API Gateway
-- CloudFront distribution
-- CodeBuild project
-
-### 2. Build and Push Docker Image
-
+### Option 2: Hot Reload (if supported)
+If your AgentCore service supports hot reload, simply restart the service:
 ```bash
-# Get CodeBuild project name
-CODEBUILD_PROJECT=$(aws cloudformation describe-stacks \
-  --stack-name travel-assistant \
-  --region eu-central-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`CodeBuildProject`].OutputValue' \
-  --output text)
-
-# Start build
-aws codebuild start-build \
-  --project-name $CODEBUILD_PROJECT \
-  --region eu-central-1
+# Restart the service to pick up new code
+systemctl restart agentcore
+# or
+docker restart agentcore-container
 ```
 
-This will build the Docker image and push it to ECR.
+## Testing the New System
 
-### 3. Create Bedrock Agent with AgentCore
-
-After the build completes, get the ECR image URI:
-
-```bash
-ECR_URI=$(aws cloudformation describe-stacks \
-  --stack-name travel-assistant \
-  --region eu-central-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`ECRRepository`].OutputValue' \
-  --output text)
-
-echo "Image URI: $ECR_URI:latest"
+### Test Query 1: Simple Travel Request
+```json
+{
+  "message": "I want to travel from New York to Paris next week",
+  "session_id": "test-123"
+}
 ```
 
-**In AWS Console:**
+Expected behavior:
+- Orchestrator asks for specific dates
+- May call flight_booking_tool to show options
 
-1. Go to **Amazon Bedrock** → **Agents**
-2. Click **Create Agent**
-3. Choose **Custom agent with AgentCore**
-4. Configure:
-   - **Agent name**: `travel-assistant`
-   - **Model**: Claude 3 Sonnet
-   - **Container image URI**: `<ECR_URI>:latest`
-   - **IAM role**: Use the `AgentCoreRoleArn` from CloudFormation outputs
-5. Create agent and note the **Agent ID** and **Alias ID**
-
-### 4. Deploy Lambda Function
-
-```bash
-cd lambda
-
-AGENT_ID="<your-agent-id>"
-AGENT_ALIAS_ID="<your-agent-alias-id>"
-
-# Deploy Lambda with SAM
-chmod +x deploy-lambda.sh
-./deploy-lambda.sh $AGENT_ID $AGENT_ALIAS_ID
-
-cd ..
+### Test Query 2: Complete Travel Plan
+```json
+{
+  "message": "Plan a 3-day trip to Tokyo from San Francisco, departing March 15th",
+  "session_id": "test-123"
+}
 ```
 
-Get the API URL:
+Expected behavior:
+- Orchestrator calls `flight_booking_tool` for flights
+- Orchestrator calls `hotel_booking_tool` for hotels
+- Orchestrator calls `activities_tool` for things to do
+- Returns comprehensive travel plan
 
-```bash
-API_URL=$(aws cloudformation describe-stacks \
-  --stack-name travel-assistant-lambda \
-  --region eu-central-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
-  --output text)
-
-echo "API URL: $API_URL"
+### Test Query 3: Specific Request
+```json
+{
+  "message": "Find me hotels in London for March 20-23",
+  "session_id": "test-123"
+}
 ```
 
-### 5. Deploy Frontend
+Expected behavior:
+- Orchestrator calls only `hotel_booking_tool`
+- Returns hotel recommendations
 
-```bash
-# Get API URL from Lambda stack
-API_URL=$(aws cloudformation describe-stacks \
-  --stack-name travel-assistant-lambda \
-  --region eu-central-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
-  --output text)
+## Logs to Watch For
 
-# Get frontend bucket from main stack
-FRONTEND_BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name travel-assistant \
-  --region eu-central-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucket`].OutputValue' \
-  --output text)
-
-# Update frontend config
-sed -i "s|YOUR_API_GATEWAY_URL|$API_URL|g" frontend/app.js
-
-# Deploy
-aws s3 sync frontend/ s3://$FRONTEND_BUCKET/ --region eu-central-1
+After deployment, you should see:
+```
+[AGENT] Creating travel orchestrator agent...
+[AGENT] Orchestrator agent created successfully with 3 specialized agents as tools
 ```
 
-### 6. Access Application
-
-```bash
-CLOUDFRONT_URL=$(aws cloudformation describe-stacks \
-  --stack-name travel-assistant \
-  --region eu-central-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontURL`].OutputValue' \
-  --output text)
-
-echo "Application URL: $CLOUDFRONT_URL"
+When processing requests:
 ```
-
-## Testing
-
-### Test Agent Locally (Optional)
-
-```bash
-cd agentcore
-docker build -t travel-agent .
-docker run -p 8000:8000 \
-  -e AWS_REGION=eu-central-1 \
-  -e BEDROCK_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0 \
-  travel-agent
-
-# Test
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "I want to plan a trip to Paris", "session_id": "test"}'
-```
-
-### Test Lambda
-
-```bash
-aws lambda invoke \
-  --function-name $LAMBDA_FUNCTION \
-  --payload '{"body": "{\"message\": \"Hello\", \"session_id\": \"test\"}"}' \
-  --region eu-central-1 \
-  response.json
-
-cat response.json
-```
-
-## Updating the Agent
-
-To update agent code:
-
-1. Modify code in `agentcore/`
-2. Run CodeBuild to rebuild image
-3. In Bedrock console, update agent to use new image tag
-4. Test changes
-
-## Monitoring
-
-### CloudWatch Logs
-
-```bash
-# AgentCore logs
-aws logs tail /aws/bedrock/agents/<agent-id> --follow --region eu-central-1
-
-# Lambda logs
-aws logs tail /aws/lambda/$LAMBDA_FUNCTION --follow --region eu-central-1
-```
-
-### Metrics
-
-Check Bedrock Agent metrics in CloudWatch:
-- Invocations
-- Errors
-- Latency
-
-## Cleanup
-
-```bash
-# Empty S3 buckets
-aws s3 rm s3://$FRONTEND_BUCKET --recursive --region eu-central-1
-aws s3 rm s3://$ARTIFACT_BUCKET --recursive --region eu-central-1
-
-# Delete agent in Bedrock console
-
-# Delete stack
-aws cloudformation delete-stack --stack-name travel-assistant --region eu-central-1
+[CHAT] Invoking coordinator agent...
+[FLIGHT AGENT] Processing: <query>
+[HOTEL AGENT] Processing: <query>
+[ACTIVITIES AGENT] Processing: <query>
 ```
 
 ## Troubleshooting
 
-### Agent not responding
-- Check AgentCore logs in CloudWatch
-- Verify Docker image is in ECR
-- Ensure IAM role has Bedrock permissions
+### Issue: Still seeing old agent logs
+**Solution**: Container is running old code. Rebuild and redeploy.
 
-### Lambda errors
-- Verify AGENT_ID and AGENT_ALIAS_ID are set
-- Check Lambda has permission to invoke agent
-- Review CloudWatch logs
+### Issue: Agent not responding
+**Solution**: Check that Claude Sonnet model is available in your region:
+```bash
+aws bedrock list-foundation-models --region us-east-1 \
+  --query "modelSummaries[?contains(modelId, 'claude-sonnet')]"
+```
 
-### Frontend not loading
-- Check CloudFront distribution status
-- Verify S3 bucket policy
-- Check API Gateway URL in frontend config
+### Issue: Tool calls failing
+**Solution**: Check that Nova Micro is available for specialized agents:
+```bash
+aws bedrock list-foundation-models --region us-east-1 \
+  --query "modelSummaries[?contains(modelId, 'nova-micro')]"
+```
 
-## Cost Estimate
+## Architecture Benefits
 
-- **Bedrock AgentCore**: Pay per request + compute time
-- **Lambda**: Pay per invocation
-- **ECR**: Storage costs (minimal)
-- **S3 + CloudFront**: Storage + data transfer
-- **API Gateway**: Pay per request
-
-Estimated: $20-100/month depending on usage
+1. **Separation of Concerns**: Each agent specializes in one domain
+2. **Scalability**: Easy to add new specialized agents
+3. **Flexibility**: Orchestrator intelligently decides which agents to call
+4. **Cost Optimization**: Use cheaper models (Nova Micro) for specialized tasks
+5. **Better Responses**: Specialized agents provide more detailed, contextual responses
