@@ -40,7 +40,8 @@ User → Frontend → Lambda → AgentCore → Orchestrator Agent
 
 - **Multi-Agent Orchestration**: One orchestrator coordinates 3 specialized agents
 - **Agents as Tools**: Each specialist agent is exposed as a tool to the orchestrator
-- **Real-time Chat**: Session management with conversation history
+- **AgentCore Memory**: Automatic conversation history and context management
+- **Real-time Chat**: Session management with persistent memory
 - **Markdown Support**: Rich formatting for travel plans
 - **Authentication**: AWS Cognito user management
 - **Responsive UI**: Works on desktop and mobile
@@ -49,10 +50,24 @@ User → Frontend → Lambda → AgentCore → Orchestrator Agent
 ## Technology Stack
 
 - **Backend**: AWS AgentCore + Strands Agents
+- **Memory**: AgentCore Memory (memory_rllrl-lfg7zBH6MH)
 - **Frontend**: Vanilla JavaScript + CSS
 - **Infrastructure**: AWS Lambda, S3, CloudFront, Cognito
 - **Models**: Amazon Nova Micro (eu.amazon.nova-micro-v1:0)
 - **Region**: eu-central-1
+
+## Memory Management
+
+The system uses AgentCore's built-in memory capabilities:
+
+- **Memory ID**: `memory_rllrl-lfg7zBH6MH`
+- **Actor ID**: `travel_orchestrator`
+- **Branch**: `main`
+- **Agent Context**: Retrieves last 10 conversation turns for agent context
+- **Frontend Display**: Loads last 5 messages when user returns
+- **Storage**: Automatically stores user messages and agent responses
+- **Session-based**: Each user session maintains separate conversation history
+- **Persistence**: Conversations persist across browser sessions
 
 ## Deployment
 
@@ -68,15 +83,23 @@ This script performs a complete deployment:
 
 ## How It Works
 
+### Initial Load
+1. User signs in and frontend checks for existing conversation history
+2. If history exists, last 5 messages are loaded and displayed
+3. If no history, shows welcome message for new conversation
+
+### Message Flow
 1. User submits a travel request through the web interface
-2. Request goes through Lambda to AgentCore
-3. Orchestrator agent analyzes the request
-4. Orchestrator calls specialized agents as tools:
+2. Request goes through Lambda to AgentCore with session_id
+3. AgentCore retrieves conversation history from memory (last 10 turns)
+4. Orchestrator agent analyzes the request with full context
+5. Orchestrator calls specialized agents as tools:
    - `flight_booking_tool()` for flight searches
    - `hotel_booking_tool()` for hotel searches
    - `activities_tool()` for activities and attractions
-5. Orchestrator synthesizes all responses into a complete travel plan
-6. Response is formatted with markdown and displayed to user
+6. Orchestrator synthesizes all responses into a complete travel plan
+7. Conversation is stored in AgentCore memory for future context
+8. Response is formatted with markdown and displayed to user
 
 ## Agent Details
 

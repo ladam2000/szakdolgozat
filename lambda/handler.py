@@ -12,6 +12,11 @@ agent_core_client = boto3.client('bedrock-agentcore')
 # Get AgentCore Runtime ARN from environment
 AGENT_RUNTIME_ARN = os.environ.get("AGENT_RUNTIME_ARN")
 
+# Memory configuration (must match runtime_agent_main.py)
+MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
+ACTOR_ID = "travel_orchestrator"
+BRANCH_NAME = "main"
+
 
 def lambda_handler(event: Dict[str, Any], context: Any):
     """Handle Lambda Function URL requests and invoke AgentCore Runtime.
@@ -38,6 +43,10 @@ def lambda_handler(event: Dict[str, Any], context: Any):
     if http_method == 'OPTIONS':
         print("Handling OPTIONS request")
         return create_response(200, {})
+    
+    # Handle GET requests for history retrieval
+    if http_method == 'GET':
+        return handle_get_history(event)
     
     try:
         # Parse request body
@@ -67,10 +76,10 @@ def lambda_handler(event: Dict[str, Any], context: Any):
         trace_id = str(uuid.uuid4())[:8]
         
         # Prepare payload as JSON bytes
-        # AgentCore entrypoint expects 'input' or 'prompt' key
+        # AgentCore entrypoint expects 'input' and 'session_id' keys
         payload = json.dumps({
             "input": message,
-            "sessionId": session_id
+            "session_id": session_id
         }).encode('utf-8')
         
         print(f"Payload: {payload.decode('utf-8')}")
@@ -163,6 +172,68 @@ def lambda_handler(event: Dict[str, Any], context: Any):
         import traceback
         traceback.print_exc()
         return create_response(500, {"error": str(e)})
+
+
+def handle_get_history(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle GET request to retrieve conversation history.
+    
+    Args:
+        event: Lambda event
+        
+    Returns:
+        Lambda response with conversation history
+    """
+    try:
+        # Get session_id from query parameters
+        query_params = event.get('queryStringParameters', {}) or {}
+        session_id = query_params.get('session_id')
+        
+        if not session_id:
+            return create_response(400, {"error": "Missing session_id parameter"})
+        
+        print(f"Retrieving history for session: {session_id}")
+        
+        # Initialize memory client
+        from bedrock_agentcore.memory import MemoryClient
+        memory_client = MemoryClient()
+        
+        # Retrieve last 5 conversation turns
+        history = memory_client.get_last_k_turns(
+            memory_id=MEMORY_ID,
+            actor_id=ACTOR_ID,
+            session_id=session_id,
+            k=5,
+            branch_name=BRANCH_NAME
+        )
+        
+        print(f"Retrieved {len(history)} conversation turns")
+        
+        # Format history for frontend
+        messages = []
+        for turn in history:
+            role = turn.get("role", "unknown")
+            content = turn.get("content", "")
+            
+            # Map roles to frontend format
+            if role == "user":
+                messages.append({"text": content, "type": "user"})
+            elif role == "assistant":
+                messages.append({"text": content, "type": "assistant"})
+        
+        return create_response(200, {
+            "messages": messages,
+            "session_id": session_id
+        })
+        
+    except Exception as e:
+        print(f"Error retrieving history: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Return empty history on error instead of failing
+        return create_response(200, {
+            "messages": [],
+            "session_id": session_id
+        })
 
 
 def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:

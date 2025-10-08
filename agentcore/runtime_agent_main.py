@@ -1,16 +1,27 @@
-"""AgentCore runtime main entry point with orchestrator pattern."""
+"""AgentCore runtime main entry point with orchestrator pattern and memory."""
 
 import sys
 from strands import Agent, tool
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from bedrock_agentcore.memory import MemoryClient
 import json
 
 # Ensure prints are flushed immediately
 sys.stdout.flush()
 print("[STARTUP] Initializing orchestrator agent system...", flush=True)
 
+# Memory configuration
+MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
+ACTOR_ID = "travel_orchestrator"
+BRANCH_NAME = "main"
+
 # Create the AgentCore app
 app = BedrockAgentCoreApp()
+
+# Initialize memory client
+print("[MEMORY] Initializing memory client...", flush=True)
+memory_client = MemoryClient()
+print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
 
 
 # Specialized Agent 1: Flight Booking Agent
@@ -251,10 +262,10 @@ print(f"[AGENT] Tools: {[tool.__name__ for tool in [flight_booking_tool, hotel_b
 @app.entrypoint
 def travel_orchestrator_entrypoint(payload):
     """
-    AgentCore entrypoint for the travel orchestrator.
+    AgentCore entrypoint for the travel orchestrator with memory support.
     
     Args:
-        payload: Dictionary with user input (expects 'input' or 'prompt' key)
+        payload: Dictionary with user input and session_id
     
     Returns:
         String response from the orchestrator agent
@@ -262,22 +273,53 @@ def travel_orchestrator_entrypoint(payload):
     try:
         print(f"[ENTRYPOINT] Received payload: {payload}", flush=True)
         
-        # Extract user input from payload
+        # Extract user input and session_id from payload
         user_input = payload.get("input") or payload.get("prompt", "")
+        session_id = payload.get("session_id", "default_session")
         
         if not user_input:
             print("[ENTRYPOINT] WARNING: No input found in payload", flush=True)
             return "Please provide a travel request in the 'input' or 'prompt' field."
         
         print(f"[ENTRYPOINT] User input: {user_input}", flush=True)
+        print(f"[ENTRYPOINT] Session ID: {session_id}", flush=True)
+        
+        # Retrieve conversation history from memory
+        print("[MEMORY] Retrieving conversation history...", flush=True)
+        try:
+            history = memory_client.get_last_k_turns(
+                memory_id=MEMORY_ID,
+                actor_id=ACTOR_ID,
+                session_id=session_id,
+                k=10,  # Get last 10 conversation turns
+                branch_name=BRANCH_NAME
+            )
+            print(f"[MEMORY] Retrieved {len(history)} conversation turns", flush=True)
+            
+            # Format history for context
+            context = ""
+            if history:
+                context = "\n\nPrevious conversation:\n"
+                for turn in history:
+                    role = turn.get("role", "unknown")
+                    content = turn.get("content", "")
+                    context += f"{role}: {content}\n"
+                print(f"[MEMORY] Context length: {len(context)} characters", flush=True)
+        except Exception as e:
+            print(f"[MEMORY] WARNING: Could not retrieve history: {str(e)}", flush=True)
+            context = ""
+        
+        # Prepare input with context
+        agent_input = user_input
+        if context:
+            agent_input = f"{context}\n\nCurrent request: {user_input}"
         
         # Invoke the orchestrator agent
         print("[ENTRYPOINT] Invoking orchestrator agent...", flush=True)
-        response = agent(user_input)
+        response = agent(agent_input)
         print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
-        print(f"[ENTRYPOINT] Agent response: {response}", flush=True)
         
-        # Extract text from response following AWS example pattern
+        # Extract text from response
         if hasattr(response, 'message') and 'content' in response.message:
             print("[ENTRYPOINT] Extracting from response.message['content']", flush=True)
             result = response.message['content'][0]['text']
@@ -290,6 +332,22 @@ def travel_orchestrator_entrypoint(payload):
         else:
             print("[ENTRYPOINT] Converting response to string", flush=True)
             result = str(response)
+        
+        # Store conversation in memory
+        print("[MEMORY] Storing conversation in memory...", flush=True)
+        try:
+            memory_client.create_event(
+                memory_id=MEMORY_ID,
+                actor_id=ACTOR_ID,
+                session_id=session_id,
+                messages=[
+                    (user_input, "user"),
+                    (result, "assistant")
+                ]
+            )
+            print("[MEMORY] Conversation stored successfully", flush=True)
+        except Exception as e:
+            print(f"[MEMORY] WARNING: Could not store conversation: {str(e)}", flush=True)
         
         print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
         return result

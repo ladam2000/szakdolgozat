@@ -72,10 +72,13 @@ This script will:
 - **Model**: `eu.amazon.nova-micro-v1:0` (in `agentcore/runtime_agent_main.py`)
 - **Region**: `eu-central-1` (in deployment scripts)
 - **Authentication**: AWS Cognito (in `frontend/auth.js`)
+- **Memory**: AgentCore Memory ID `memory_rllrl-lfg7zBH6MH` (in `agentcore/runtime_agent_main.py`)
 
 ## Features
 
 - Multi-agent orchestration with specialized travel agents
+- AgentCore memory for conversation history and context
+- Automatic conversation history loading (last 5 messages)
 - Real-time conversation with session management
 - Markdown formatting for travel plans
 - User authentication with AWS Cognito

@@ -56,7 +56,7 @@ function showLogin() {
 }
 
 // Show main app
-function showApp() {
+async function showApp() {
     loginScreen.style.display = 'none';
     appScreen.style.display = 'block';
     
@@ -64,7 +64,8 @@ function showApp() {
         userEmail.textContent = currentUser.profile?.email || 'User';
     }
     
-    addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
+    // Load conversation history if exists
+    await loadConversationHistory();
 }
 
 // Event listeners
@@ -86,6 +87,42 @@ messageInput.addEventListener('keypress', (e) => {
 
 // Initialize on load
 initializeApp();
+
+async function loadConversationHistory() {
+    try {
+        // Try to load history for current session
+        const response = await fetch(`${API_URL}?session_id=${sessionId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.access_token}`,
+            },
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.messages && data.messages.length > 0) {
+            // Load existing conversation
+            console.log(`Loading ${data.messages.length} previous messages`);
+            data.messages.forEach(msg => {
+                addMessage(msg.text, msg.type);
+            });
+            addSystemMessage('Conversation resumed. How can I help you further?');
+        } else {
+            // New conversation
+            addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
+        }
+        
+    } catch (error) {
+        console.error('Error loading history:', error);
+        // If history loading fails, just show welcome message
+        addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
+    }
+}
 
 async function sendMessage() {
     const message = messageInput.value.trim();
