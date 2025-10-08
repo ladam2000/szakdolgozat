@@ -328,19 +328,48 @@ def travel_orchestrator_entrypoint(payload):
         sys.stdout.flush()
         sys.stderr.flush()
         
-        # Use agent with memory integration
-        print("[MEMORY] Using agent with memory integration...", flush=True)
+        # Retrieve conversation history from memory
+        print("[MEMORY] Retrieving conversation history...", flush=True)
+        conversation_history = []
+        try:
+            response_history = memory_client.get_last_k_turns(
+                memory_id=MEMORY_ID,
+                actor_id=ACTOR_ID,
+                session_id=session_id,
+                k=10,
+                branch_name=BRANCH_NAME
+            )
+            
+            events = response_history.get("events", [])
+            print(f"[MEMORY] Retrieved {len(events)} events", flush=True)
+            
+            # Extract messages from events
+            for event in events:
+                payload = event.get("payload", {})
+                messages = payload.get("messages", [])
+                for msg in messages:
+                    conversation_history.append(msg)
+            
+            print(f"[MEMORY] Total messages in history: {len(conversation_history)}", flush=True)
+        except Exception as e:
+            print(f"[MEMORY] Error retrieving history: {e}", flush=True)
+            conversation_history = []
         
-        # Invoke the orchestrator agent with memory context
-        # The agent will use memory_client to retrieve and store conversations
+        # Build conversation context
+        if conversation_history:
+            context_messages = "\n".join([
+                f"{msg['role']}: {msg['content']}" 
+                for msg in conversation_history
+            ])
+            full_input = f"Previous conversation:\n{context_messages}\n\nCurrent message:\nuser: {user_input}"
+            print(f"[MEMORY] Injecting {len(conversation_history)} messages as context", flush=True)
+        else:
+            full_input = user_input
+            print("[MEMORY] No previous history, starting fresh conversation", flush=True)
+        
+        # Invoke the orchestrator agent
         print("[ENTRYPOINT] Invoking orchestrator agent...", flush=True)
-        response = agent(
-            user_input,
-            memory_id=MEMORY_ID,
-            actor_id=ACTOR_ID,
-            session_id=session_id,
-            branch_name=BRANCH_NAME
-        )
+        response = agent(full_input)
         print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
         
         # Extract text from response
@@ -388,9 +417,22 @@ def travel_orchestrator_entrypoint(payload):
             import traceback
             traceback.print_exc()
         
-        # AgentCore automatically stores the conversation in memory
-        # No need to manually call create_event
-        print("[MEMORY] AgentCore will automatically store this conversation", flush=True)
+        # Store conversation in memory
+        print("[MEMORY] Storing conversation in memory...", flush=True)
+        try:
+            memory_client.create_event(
+                memory_id=MEMORY_ID,
+                actor_id=ACTOR_ID,
+                session_id=session_id,
+                messages=[
+                    (user_input, "user"),
+                    (result, "assistant")
+                ]
+            )
+            print("[MEMORY] Conversation stored successfully", flush=True)
+        except Exception as e:
+            print(f"[MEMORY] Error storing conversation: {e}", flush=True)
+        
         print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
         return result
         
