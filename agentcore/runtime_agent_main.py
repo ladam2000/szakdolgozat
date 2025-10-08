@@ -20,15 +20,18 @@ logger = logging.getLogger("agentcore-memory")
 # Memory configuration
 MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
 BRANCH_NAME = "main"
+REGION = "eu-central-1"  # Memory is in eu-central-1
 
 # Create the AgentCore app
 print("[MEMORY] Initializing AgentCore app...", flush=True)
 app = BedrockAgentCoreApp()
 
-# Initialize memory client
-memory_client = MemoryClient()
+# Initialize memory client with correct region
+print(f"[MEMORY] Initializing MemoryClient for region: {REGION}", flush=True)
+memory_client = MemoryClient(region_name=REGION)
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
 print(f"[MEMORY] Branch: {BRANCH_NAME}", flush=True)
+print(f"[MEMORY] Region: {REGION}", flush=True)
 
 
 # Memory Hook Provider (from AWS reference)
