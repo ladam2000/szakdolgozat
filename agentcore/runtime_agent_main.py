@@ -359,7 +359,14 @@ def travel_orchestrator_entrypoint(payload):
             else:
                 print("[MEMORY] No previous conversation history found", flush=True)
         except Exception as e:
-            print(f"[MEMORY] ERROR retrieving history: {type(e).__name__}: {str(e)}", flush=True)
+            error_msg = str(e)
+            print(f"[MEMORY] ERROR retrieving history: {type(e).__name__}: {error_msg}", flush=True)
+            if "ResourceNotFoundException" in str(type(e)) or "Memory not found" in error_msg:
+                print(f"[MEMORY] Memory {MEMORY_ID} not found or not accessible", flush=True)
+                print(f"[MEMORY] Please ensure:", flush=True)
+                print(f"[MEMORY]   1. Memory exists: arn:aws:bedrock-agentcore:eu-central-1:206631439304:memory/{MEMORY_ID}", flush=True)
+                print(f"[MEMORY]   2. AgentCore runtime has permission to access the memory", flush=True)
+                print(f"[MEMORY]   3. Memory is associated with the AgentCore runtime", flush=True)
             import traceback
             traceback.print_exc()
             context = ""
@@ -411,7 +418,11 @@ def travel_orchestrator_entrypoint(payload):
             event_id = response.get("event", {}).get("eventId", "unknown")
             print(f"[MEMORY] Conversation stored successfully with event ID: {event_id}", flush=True)
         except Exception as e:
-            print(f"[MEMORY] ERROR storing conversation: {type(e).__name__}: {str(e)}", flush=True)
+            error_msg = str(e)
+            print(f"[MEMORY] ERROR storing conversation: {type(e).__name__}: {error_msg}", flush=True)
+            if "ResourceNotFoundException" in str(type(e)) or "Memory not found" in error_msg:
+                print(f"[MEMORY] Memory {MEMORY_ID} not found or not accessible", flush=True)
+                print(f"[MEMORY] Continuing without memory storage...", flush=True)
             import traceback
             traceback.print_exc()
         
