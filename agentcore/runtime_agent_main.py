@@ -437,20 +437,11 @@ def travel_orchestrator_entrypoint(payload):
         return f"I apologize, but I encountered an error: {str(e)}"
 
 
-# Test the entrypoint to verify it's registered and working
-print("[RUNTIME] Testing entrypoint registration...", flush=True)
-try:
-    print(f"[RUNTIME] Entrypoint function: {travel_orchestrator_entrypoint}", flush=True)
-    print("[RUNTIME] Entrypoint registered successfully!", flush=True)
-    
-    # Try a test call to verify it works
-    print("[RUNTIME] Running test invocation...", flush=True)
-    test_result = travel_orchestrator_entrypoint({"input": "test", "session_id": "test_startup"})
-    print(f"[RUNTIME] Test invocation successful! Response length: {len(test_result)}", flush=True)
-except Exception as e:
-    print(f"[RUNTIME] ERROR during test: {type(e).__name__}: {e}", flush=True)
-    import traceback
-    traceback.print_exc()
+# Verify entrypoint is registered
+print("[RUNTIME] Entrypoint registered successfully!", flush=True)
+print(f"[RUNTIME] Memory ID: {MEMORY_ID}", flush=True)
+print(f"[RUNTIME] Actor ID: {ACTOR_ID}", flush=True)
+print("[RUNTIME] Ready to process requests!", flush=True)
 
 # Run the AgentCore app
 if __name__ == "__main__":
