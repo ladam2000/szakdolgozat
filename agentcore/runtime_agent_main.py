@@ -1,7 +1,10 @@
 """AgentCore runtime main entry point with orchestrator pattern and memory."""
 
 import sys
+import logging
+from datetime import datetime
 from strands import Agent, tool
+from strands.hooks import AgentInitializedEvent, HookProvider, HookRegistry, MessageAddedEvent
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from bedrock_agentcore.memory import MemoryClient
 import json
@@ -10,29 +13,122 @@ import json
 sys.stdout.flush()
 print("[STARTUP] Initializing orchestrator agent system...", flush=True)
 
+# Setup logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+logger = logging.getLogger("agentcore-memory")
+
 # Memory configuration
 MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
-ACTOR_ID = "travel_orchestrator"
 BRANCH_NAME = "main"
 
 # Create the AgentCore app
 print("[MEMORY] Initializing AgentCore app...", flush=True)
 app = BedrockAgentCoreApp()
 
-# Initialize memory client for manual operations
-from bedrock_agentcore.memory import MemoryClient
+# Initialize memory client
 memory_client = MemoryClient()
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
-print(f"[MEMORY] Actor ID: {ACTOR_ID}", flush=True)
 print(f"[MEMORY] Branch: {BRANCH_NAME}", flush=True)
 
 
+# Memory Hook Provider (from AWS reference)
+class ShortTermMemoryHook(HookProvider):
+    def __init__(self, memory_client: MemoryClient, memory_id: str):
+        self.memory_client = memory_client
+        self.memory_id = memory_id
+    
+    def on_agent_initialized(self, event: AgentInitializedEvent):
+        """Load recent conversation history when agent starts"""
+        try:
+            # Get session info from agent state
+            actor_id = event.agent.state.get("actor_id")
+            session_id = event.agent.state.get("session_id")
+            
+            if not actor_id or not session_id:
+                logger.warning("Missing actor_id or session_id in agent state")
+                return
+            
+            # Get last 5 conversation turns
+            recent_turns = self.memory_client.get_last_k_turns(
+                memory_id=self.memory_id,
+                actor_id=actor_id,
+                session_id=session_id,
+                k=5,
+                branch_name=BRANCH_NAME
+            )
+            
+            if recent_turns and recent_turns.get("events"):
+                # Format conversation history for context
+                context_messages = []
+                for event_data in recent_turns["events"]:
+                    payload = event_data.get("payload", {})
+                    messages = payload.get("messages", [])
+                    for message in messages:
+                        role = message.get('role', '').lower()
+                        content = message.get('content', '')
+                        if isinstance(content, dict):
+                            content = content.get('text', str(content))
+                        context_messages.append(f"{role.title()}: {content}")
+                
+                if context_messages:
+                    context = "\n".join(context_messages)
+                    logger.info(f"Context from memory: {context[:200]}...")
+                    
+                    # Add context to agent's system prompt
+                    event.agent.system_prompt += f"\n\nRecent conversation history:\n{context}\n\nContinue the conversation naturally based on this context."
+                    
+                    logger.info(f"✅ Loaded {len(context_messages)} recent messages")
+            else:
+                logger.info("No previous conversation history found")
+                
+        except Exception as e:
+            logger.error(f"Failed to load conversation history: {e}")
+    
+    def on_message_added(self, event: MessageAddedEvent):
+        """Store conversation turns in memory"""
+        messages = event.agent.messages
+        try:
+            # Get session info from agent state
+            actor_id = event.agent.state.get("actor_id")
+            session_id = event.agent.state.get("session_id")
+            
+            if not actor_id or not session_id:
+                logger.warning("Missing actor_id or session_id in agent state")
+                return
+            
+            # Store the last message
+            if messages:
+                last_message = messages[-1]
+                content = last_message.get("content", [{}])[0].get("text", "")
+                role = last_message.get("role", "")
+                
+                self.memory_client.create_event(
+                    memory_id=self.memory_id,
+                    actor_id=actor_id,
+                    session_id=session_id,
+                    messages=[(content, role)]
+                )
+                logger.info(f"✅ Stored message in memory: {role}")
+            
+        except Exception as e:
+            logger.error(f"Failed to store message: {e}")
+    
+    def register_hooks(self, registry: HookRegistry) -> None:
+        # Register memory hooks
+        registry.add_callback(MessageAddedEvent, self.on_message_added)
+        registry.add_callback(AgentInitializedEvent, self.on_agent_initialized)
+
+
 # Specialized Agent 1: Flight Booking Agent
-def create_flight_agent() -> Agent:
-    """Create specialized agent for flight bookings."""
+def create_flight_agent(actor_id: str, session_id: str) -> Agent:
+    """Create specialized agent for flight bookings with memory."""
+    memory_hooks = ShortTermMemoryHook(memory_client, MEMORY_ID)
+    
     agent = Agent(
         name="FlightBookingAgent",
         model="eu.amazon.nova-micro-v1:0",
+        hooks=[memory_hooks],
+        state={"actor_id": actor_id, "session_id": session_id}
     )
     
     agent.system_prompt = """You are a flight booking specialist assistant.
@@ -66,11 +162,15 @@ Always remind users to verify information on actual booking platforms."""
 
 
 # Specialized Agent 2: Hotel Booking Agent
-def create_hotel_agent() -> Agent:
-    """Create specialized agent for hotel bookings."""
+def create_hotel_agent(actor_id: str, session_id: str) -> Agent:
+    """Create specialized agent for hotel bookings with memory."""
+    memory_hooks = ShortTermMemoryHook(memory_client, MEMORY_ID)
+    
     agent = Agent(
         name="HotelBookingAgent",
         model="eu.amazon.nova-micro-v1:0",
+        hooks=[memory_hooks],
+        state={"actor_id": actor_id, "session_id": session_id}
     )
     
     agent.system_prompt = """You are a hotel booking specialist assistant.
@@ -105,11 +205,15 @@ Always remind users to verify information on actual booking platforms."""
 
 
 # Specialized Agent 3: Activities Agent
-def create_activities_agent() -> Agent:
-    """Create specialized agent for activities and attractions."""
+def create_activities_agent(actor_id: str, session_id: str) -> Agent:
+    """Create specialized agent for activities and attractions with memory."""
+    memory_hooks = ShortTermMemoryHook(memory_client, MEMORY_ID)
+    
     agent = Agent(
         name="ActivitiesAgent",
         model="eu.amazon.nova-micro-v1:0",
+        hooks=[memory_hooks],
+        state={"actor_id": actor_id, "session_id": session_id}
     )
     
     agent.system_prompt = """You are a local activities and attractions specialist assistant.
@@ -148,12 +252,24 @@ Always provide real, well-known attractions and remind users to verify current i
     return agent
 
 
-# Create specialized agents
-print("[AGENT] Creating specialized agents...", flush=True)
-flight_agent = create_flight_agent()
-hotel_agent = create_hotel_agent()
-activities_agent = create_activities_agent()
-print("[AGENT] Specialized agents created", flush=True)
+# Store session-specific agents (will be created per session)
+session_agents = {}
+
+def get_or_create_agents(session_id: str):
+    """Get or create agents for a specific session."""
+    if session_id not in session_agents:
+        flight_actor_id = f"flight-{session_id}"
+        hotel_actor_id = f"hotel-{session_id}"
+        activities_actor_id = f"activities-{session_id}"
+        
+        session_agents[session_id] = {
+            'flight': create_flight_agent(flight_actor_id, session_id),
+            'hotel': create_hotel_agent(hotel_actor_id, session_id),
+            'activities': create_activities_agent(activities_actor_id, session_id)
+        }
+        print(f"[AGENT] Created specialized agents for session: {session_id}", flush=True)
+    
+    return session_agents[session_id]
 
 
 # Convert agents to tools for the orchestrator
@@ -166,18 +282,15 @@ def flight_booking_tool(query: str) -> str:
     """
     try:
         print(f"[FLIGHT AGENT] Processing: {query}", flush=True)
-        response = flight_agent(query)
+        # Get session_id from context (will be set in entrypoint)
+        session_id = getattr(flight_booking_tool, '_session_id', 'default_session')
+        agents = get_or_create_agents(session_id)
+        
+        response = agents['flight'](query)
         print(f"[FLIGHT AGENT] Response type: {type(response)}", flush=True)
         
         # Extract text from Strands response
-        if hasattr(response, 'message') and 'content' in response.message:
-            result = response.message['content'][0]['text']
-        elif hasattr(response, 'content'):
-            result = response.content
-        elif isinstance(response, dict) and 'content' in response:
-            result = response['content']
-        else:
-            result = str(response)
+        result = str(response)
         
         print(f"[FLIGHT AGENT] Returning: {len(result)} characters", flush=True)
         return result
@@ -195,18 +308,15 @@ def hotel_booking_tool(query: str) -> str:
     """
     try:
         print(f"[HOTEL AGENT] Processing: {query}", flush=True)
-        response = hotel_agent(query)
+        # Get session_id from context (will be set in entrypoint)
+        session_id = getattr(hotel_booking_tool, '_session_id', 'default_session')
+        agents = get_or_create_agents(session_id)
+        
+        response = agents['hotel'](query)
         print(f"[HOTEL AGENT] Response type: {type(response)}", flush=True)
         
         # Extract text from Strands response
-        if hasattr(response, 'message') and 'content' in response.message:
-            result = response.message['content'][0]['text']
-        elif hasattr(response, 'content'):
-            result = response.content
-        elif isinstance(response, dict) and 'content' in response:
-            result = response['content']
-        else:
-            result = str(response)
+        result = str(response)
         
         print(f"[HOTEL AGENT] Returning: {len(result)} characters", flush=True)
         return result
@@ -224,18 +334,15 @@ def activities_tool(query: str) -> str:
     """
     try:
         print(f"[ACTIVITIES AGENT] Processing: {query}", flush=True)
-        response = activities_agent(query)
+        # Get session_id from context (will be set in entrypoint)
+        session_id = getattr(activities_tool, '_session_id', 'default_session')
+        agents = get_or_create_agents(session_id)
+        
+        response = agents['activities'](query)
         print(f"[ACTIVITIES AGENT] Response type: {type(response)}", flush=True)
         
         # Extract text from Strands response
-        if hasattr(response, 'message') and 'content' in response.message:
-            result = response.message['content'][0]['text']
-        elif hasattr(response, 'content'):
-            result = response.content
-        elif isinstance(response, dict) and 'content' in response:
-            result = response['content']
-        else:
-            result = str(response)
+        result = str(response)
         
         print(f"[ACTIVITIES AGENT] Returning: {len(result)} characters", flush=True)
         return result
@@ -288,7 +395,7 @@ print(f"[AGENT] Tools: {[tool.__name__ for tool in [flight_booking_tool, hotel_b
 @app.entrypoint
 def travel_orchestrator_entrypoint(payload):
     """
-    AgentCore entrypoint for the travel orchestrator with memory support.
+    AgentCore entrypoint for the travel orchestrator with memory support via Strands hooks.
     
     Args:
         payload: Dictionary with user input and session_id
@@ -328,110 +435,20 @@ def travel_orchestrator_entrypoint(payload):
         sys.stdout.flush()
         sys.stderr.flush()
         
-        # Retrieve conversation history from memory
-        print("[MEMORY] Retrieving conversation history...", flush=True)
-        conversation_history = []
-        try:
-            response_history = memory_client.get_last_k_turns(
-                memory_id=MEMORY_ID,
-                actor_id=ACTOR_ID,
-                session_id=session_id,
-                k=10,
-                branch_name=BRANCH_NAME
-            )
-            
-            events = response_history.get("events", [])
-            print(f"[MEMORY] Retrieved {len(events)} events", flush=True)
-            
-            # Extract messages from events
-            for event in events:
-                payload = event.get("payload", {})
-                messages = payload.get("messages", [])
-                for msg in messages:
-                    conversation_history.append(msg)
-            
-            print(f"[MEMORY] Total messages in history: {len(conversation_history)}", flush=True)
-        except Exception as e:
-            print(f"[MEMORY] Error retrieving history: {e}", flush=True)
-            conversation_history = []
-        
-        # Build conversation context
-        if conversation_history:
-            context_messages = "\n".join([
-                f"{msg['role']}: {msg['content']}" 
-                for msg in conversation_history
-            ])
-            full_input = f"Previous conversation:\n{context_messages}\n\nCurrent message:\nuser: {user_input}"
-            print(f"[MEMORY] Injecting {len(conversation_history)} messages as context", flush=True)
-        else:
-            full_input = user_input
-            print("[MEMORY] No previous history, starting fresh conversation", flush=True)
+        # Set session_id in tool context for specialized agents
+        flight_booking_tool._session_id = session_id
+        hotel_booking_tool._session_id = session_id
+        activities_tool._session_id = session_id
         
         # Invoke the orchestrator agent
+        # Memory is handled automatically by Strands hooks in specialized agents
         print("[ENTRYPOINT] Invoking orchestrator agent...", flush=True)
-        response = agent(full_input)
+        print("[MEMORY] Memory operations handled by Strands hooks", flush=True)
+        response = agent(user_input)
         print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
         
         # Extract text from response
-        if hasattr(response, 'message') and 'content' in response.message:
-            print("[ENTRYPOINT] Extracting from response.message['content']", flush=True)
-            result = response.message['content'][0]['text']
-        elif hasattr(response, 'content'):
-            print("[ENTRYPOINT] Extracting from response.content", flush=True)
-            result = response.content
-        elif isinstance(response, dict) and 'content' in response:
-            print("[ENTRYPOINT] Extracting from response['content']", flush=True)
-            result = response['content']
-        else:
-            print("[ENTRYPOINT] Converting response to string", flush=True)
-            result = str(response)
-        
-        # Store conversation in memory
-        print("[MEMORY] Storing conversation in memory...", flush=True)
-        try:
-            from datetime import datetime
-            import uuid
-            
-            print(f"[MEMORY] Calling create_event with memory_id={MEMORY_ID}, actor_id={ACTOR_ID}, session_id={session_id}", flush=True)
-            print(f"[MEMORY] User message length: {len(user_input)}, Assistant message length: {len(result)}", flush=True)
-            
-            # Call create_event with correct parameter names (snake_case)
-            response = memory_client.create_event(
-                memory_id=MEMORY_ID,
-                actor_id=ACTOR_ID,
-                session_id=session_id,
-                messages=[
-                    (user_input, "user"),
-                    (result, "assistant")
-                ]
-            )
-            
-            event_id = response.get("event", {}).get("eventId", "unknown")
-            print(f"[MEMORY] Conversation stored successfully with event ID: {event_id}", flush=True)
-        except Exception as e:
-            error_msg = str(e)
-            print(f"[MEMORY] ERROR storing conversation: {type(e).__name__}: {error_msg}", flush=True)
-            if "ResourceNotFoundException" in str(type(e)) or "Memory not found" in error_msg:
-                print(f"[MEMORY] Memory {MEMORY_ID} not found or not accessible", flush=True)
-                print(f"[MEMORY] Continuing without memory storage...", flush=True)
-            import traceback
-            traceback.print_exc()
-        
-        # Store conversation in memory
-        print("[MEMORY] Storing conversation in memory...", flush=True)
-        try:
-            memory_client.create_event(
-                memory_id=MEMORY_ID,
-                actor_id=ACTOR_ID,
-                session_id=session_id,
-                messages=[
-                    (user_input, "user"),
-                    (result, "assistant")
-                ]
-            )
-            print("[MEMORY] Conversation stored successfully", flush=True)
-        except Exception as e:
-            print(f"[MEMORY] Error storing conversation: {e}", flush=True)
+        result = str(response)
         
         print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
         return result
