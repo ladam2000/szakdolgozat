@@ -44,8 +44,17 @@ def lambda_handler(event: Dict[str, Any], context: Any):
         print("Handling OPTIONS request")
         return create_response(200, {})
     
-    # Handle GET requests for history retrieval
+    # Handle GET requests
     if http_method == 'GET':
+        # Check if it's a health check
+        path = event.get('rawPath', event.get('path', '/'))
+        if path == '/health':
+            return create_response(200, {
+                "status": "healthy",
+                "agent_runtime_arn": AGENT_RUNTIME_ARN,
+                "memory_id": MEMORY_ID
+            })
+        # Otherwise handle history retrieval
         return handle_get_history(event)
     
     try:
