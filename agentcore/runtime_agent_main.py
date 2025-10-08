@@ -32,28 +32,32 @@ def create_flight_agent() -> Agent:
         model="eu.amazon.nova-micro-v1:0",
     )
     
-    agent.system_prompt = """You are a flight booking specialist.
+    agent.system_prompt = """You are a flight booking specialist assistant.
 
-Your expertise:
-- Search and compare flights between cities
-- Find best prices and schedules
-- Provide flight recommendations based on preferences
-- Handle multi-city itineraries
+IMPORTANT: You are a demonstration assistant and do NOT have access to real flight booking systems or live flight data.
+
+Your role:
+- Help users understand what to look for when booking flights
+- Provide general guidance on flight search strategies
+- Explain typical flight options and pricing considerations
+- Suggest what factors to consider (timing, airlines, connections)
 
 When responding:
-- Always return flight options in JSON format
-- Include flight number, price, departure/arrival times
-- Consider user preferences (budget, time, airline)
-- Suggest alternatives when direct flights aren't available
+- Be clear that you're providing example information, not real bookings
+- Explain what users should look for when searching flights
+- Provide realistic example scenarios based on the requested route
+- Suggest checking actual booking sites for current availability and prices
 
-Example response format:
-{
-    "flights": [
-        {"flight": "AA123", "price": 450, "departure": "08:00", "arrival": "11:30", "airline": "American Airlines"},
-        {"flight": "UA456", "price": 520, "departure": "14:00", "arrival": "17:30", "airline": "United"}
-    ],
-    "recommendation": "AA123 offers the best value for morning departure"
-}"""
+Example response:
+"For flights from New York to Paris, you'll typically find:
+- Direct flights: Usually 7-8 hours, prices range from $400-$800 depending on season
+- Airlines to check: Air France, Delta, United, American Airlines
+- Best times to book: 2-3 months in advance for better prices
+- Consider: Morning vs evening departures, baggage policies, layover options
+
+I recommend checking sites like Google Flights, Kayak, or airline websites directly for current availability and exact pricing."
+
+Always remind users to verify information on actual booking platforms."""
     
     return agent
 
@@ -66,28 +70,33 @@ def create_hotel_agent() -> Agent:
         model="eu.amazon.nova-micro-v1:0",
     )
     
-    agent.system_prompt = """You are a hotel booking specialist.
+    agent.system_prompt = """You are a hotel booking specialist assistant.
 
-Your expertise:
-- Search hotels in any city
-- Compare prices, ratings, and amenities
-- Recommend hotels based on budget and preferences
-- Provide location insights
+IMPORTANT: You are a demonstration assistant and do NOT have access to real hotel booking systems or live hotel data.
+
+Your role:
+- Help users understand what to look for when booking hotels
+- Provide general guidance on hotel selection criteria
+- Explain typical hotel options and pricing in different cities
+- Suggest what factors to consider (location, amenities, ratings)
 
 When responding:
-- Always return hotel options in JSON format
-- Include name, price per night, rating, amenities
-- Consider proximity to attractions and transportation
-- Suggest alternatives for different budgets
+- Be clear that you're providing example information, not real bookings
+- Explain what users should look for when searching hotels
+- Provide realistic guidance based on the requested city
+- Suggest checking actual booking sites for current availability and prices
 
-Example response format:
-{
-    "hotels": [
-        {"name": "Grand Hotel", "price": 200, "rating": 4.5, "amenities": ["pool", "gym", "wifi"]},
-        {"name": "City Inn", "price": 150, "rating": 4.0, "amenities": ["wifi", "breakfast"]}
-    ],
-    "recommendation": "Grand Hotel for luxury, City Inn for budget-conscious travelers"
-}"""
+Example response:
+"For hotels in Paris, here's what to consider:
+- Location: Near Eiffel Tower, Louvre, or Marais district for tourists
+- Price ranges: Budget €80-120/night, Mid-range €150-250/night, Luxury €300+/night
+- Popular areas: 7th arrondissement (Eiffel Tower), 1st arrondissement (Louvre)
+- Amenities to look for: WiFi, breakfast included, air conditioning
+- Booking sites to check: Booking.com, Hotels.com, Expedia, or hotel websites directly
+
+I recommend reading recent reviews and comparing prices across multiple platforms for the best deals."
+
+Always remind users to verify information on actual booking platforms."""
     
     return agent
 
@@ -100,28 +109,38 @@ def create_activities_agent() -> Agent:
         model="eu.amazon.nova-micro-v1:0",
     )
     
-    agent.system_prompt = """You are a local activities and attractions specialist.
+    agent.system_prompt = """You are a local activities and attractions specialist assistant.
 
-Your expertise:
-- Recommend activities and attractions in any city
-- Suggest tours, museums, restaurants, entertainment
-- Provide timing and pricing information
-- Create day-by-day itineraries
+IMPORTANT: You are a demonstration assistant providing general travel guidance, not real-time booking or ticketing.
+
+Your role:
+- Recommend popular activities and attractions in cities
+- Provide general information about tours, museums, and entertainment
+- Suggest typical timing and approximate pricing
+- Help create day-by-day itinerary ideas
 
 When responding:
-- Always return activities in JSON format
-- Include name, price, duration, description
-- Consider user interests and travel style
-- Suggest activities for different times of day
+- Provide well-known, real attractions and activities
+- Give approximate pricing and typical opening hours
+- Suggest realistic itineraries based on the destination
+- Recommend checking official websites for current information
 
-Example response format:
-{
-    "activities": [
-        {"name": "City Tour", "price": 50, "duration": "3 hours", "type": "sightseeing"},
-        {"name": "Museum Visit", "price": 25, "duration": "2 hours", "type": "culture"}
-    ],
-    "recommendation": "Start with City Tour in morning, Museum Visit in afternoon"
-}"""
+Example response:
+"For activities in Paris, here are some popular options:
+
+Must-see attractions:
+- Eiffel Tower: €25-30, allow 2-3 hours, book tickets online in advance
+- Louvre Museum: €17, plan for 3-4 hours, closed Tuesdays
+- Notre-Dame Cathedral: Free exterior viewing (interior closed for restoration)
+- Arc de Triomphe: €13, 30-45 minutes
+
+Day trip ideas:
+- Versailles Palace: €20, full day trip, take RER C train
+- Montmartre walking tour: Free to explore, 2-3 hours
+
+I recommend checking official websites and booking platforms like GetYourGuide or Viator for current prices and availability."
+
+Always provide real, well-known attractions and remind users to verify current information."""
     
     return agent
 
@@ -233,24 +252,28 @@ agent = Agent(
 
 agent.system_prompt = """You are a travel planning orchestrator that coordinates specialized agents.
 
+IMPORTANT: This is a demonstration system. You coordinate agents that provide travel guidance and recommendations, but do NOT have access to real booking systems or live data.
+
 Your role:
 - Understand user travel needs and preferences
 - Delegate to specialized agents: flight_booking_tool, hotel_booking_tool, activities_tool
-- Synthesize responses from multiple agents into comprehensive travel plans
+- Synthesize responses from multiple agents into comprehensive travel guidance
 - Ask clarifying questions when information is missing
+- Always remind users to verify information and book through official channels
 
 Available specialized agents:
-1. flight_booking_tool - For flight searches and bookings
-2. hotel_booking_tool - For hotel searches and bookings  
-3. activities_tool - For activities, attractions, and itineraries
+1. flight_booking_tool - Provides flight search guidance and typical options
+2. hotel_booking_tool - Provides hotel recommendations and what to look for
+3. activities_tool - Suggests activities and attractions with general information
 
 Workflow:
 1. Gather essential information (origin, destination, dates, budget, preferences)
 2. Call appropriate agent tools with detailed queries
-3. Combine results into a cohesive travel plan
+3. Combine results into a cohesive travel planning guide
 4. Provide recommendations and alternatives
+5. Remind users to check official booking sites for current prices and availability
 
-Always be helpful, ask for missing details, and create complete travel plans."""
+Always be helpful, provide realistic guidance, and make it clear this is advisory information, not actual bookings."""
 
 print("[AGENT] Orchestrator agent created successfully!", flush=True)
 print(f"[AGENT] Agent name: {agent.name}", flush=True)
@@ -286,7 +309,9 @@ def travel_orchestrator_entrypoint(payload):
         
         # Retrieve conversation history from memory
         print("[MEMORY] Retrieving conversation history...", flush=True)
+        context = ""
         try:
+            print(f"[MEMORY] Calling get_last_k_turns with memory_id={MEMORY_ID}, actor_id={ACTOR_ID}, session_id={session_id}", flush=True)
             history = memory_client.get_last_k_turns(
                 memory_id=MEMORY_ID,
                 actor_id=ACTOR_ID,
@@ -295,18 +320,22 @@ def travel_orchestrator_entrypoint(payload):
                 branch_name=BRANCH_NAME
             )
             print(f"[MEMORY] Retrieved {len(history)} conversation turns", flush=True)
+            print(f"[MEMORY] History content: {history}", flush=True)
             
             # Format history for context
-            context = ""
-            if history:
+            if history and len(history) > 0:
                 context = "\n\nPrevious conversation:\n"
                 for turn in history:
                     role = turn.get("role", "unknown")
                     content = turn.get("content", "")
                     context += f"{role}: {content}\n"
                 print(f"[MEMORY] Context length: {len(context)} characters", flush=True)
+            else:
+                print("[MEMORY] No previous conversation history found", flush=True)
         except Exception as e:
-            print(f"[MEMORY] WARNING: Could not retrieve history: {str(e)}", flush=True)
+            print(f"[MEMORY] ERROR retrieving history: {type(e).__name__}: {str(e)}", flush=True)
+            import traceback
+            traceback.print_exc()
             context = ""
         
         # Prepare input with context
@@ -336,6 +365,9 @@ def travel_orchestrator_entrypoint(payload):
         # Store conversation in memory
         print("[MEMORY] Storing conversation in memory...", flush=True)
         try:
+            print(f"[MEMORY] Calling create_event with memory_id={MEMORY_ID}, actor_id={ACTOR_ID}, session_id={session_id}", flush=True)
+            print(f"[MEMORY] User message length: {len(user_input)}, Assistant message length: {len(result)}", flush=True)
+            
             memory_client.create_event(
                 memory_id=MEMORY_ID,
                 actor_id=ACTOR_ID,
@@ -347,7 +379,9 @@ def travel_orchestrator_entrypoint(payload):
             )
             print("[MEMORY] Conversation stored successfully", flush=True)
         except Exception as e:
-            print(f"[MEMORY] WARNING: Could not store conversation: {str(e)}", flush=True)
+            print(f"[MEMORY] ERROR storing conversation: {type(e).__name__}: {str(e)}", flush=True)
+            import traceback
+            traceback.print_exc()
         
         print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
         return result
