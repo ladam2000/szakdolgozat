@@ -311,25 +311,33 @@ def travel_orchestrator_entrypoint(payload):
         print("[MEMORY] Retrieving conversation history...", flush=True)
         context = ""
         try:
-            print(f"[MEMORY] Calling get_last_k_turns with memory_id={MEMORY_ID}, actor_id={ACTOR_ID}, session_id={session_id}", flush=True)
-            history = memory_client.get_last_k_turns(
-                memory_id=MEMORY_ID,
-                actor_id=ACTOR_ID,
-                session_id=session_id,
+            print(f"[MEMORY] Calling get_last_k_turns with memoryId={MEMORY_ID}, actorId={ACTOR_ID}, sessionId={session_id}", flush=True)
+            
+            # Call with correct parameter names (camelCase)
+            response = memory_client.get_last_k_turns(
+                memoryId=MEMORY_ID,
+                actorId=ACTOR_ID,
+                sessionId=session_id,
                 k=10,  # Get last 10 conversation turns
-                branch_name=BRANCH_NAME
+                branchName=BRANCH_NAME
             )
-            print(f"[MEMORY] Retrieved {len(history)} conversation turns", flush=True)
-            print(f"[MEMORY] History content: {history}", flush=True)
+            
+            # Extract events from response
+            events = response.get("events", [])
+            print(f"[MEMORY] Retrieved {len(events)} conversation events", flush=True)
             
             # Format history for context
-            if history and len(history) > 0:
+            if events and len(events) > 0:
                 context = "\n\nPrevious conversation:\n"
-                for turn in history:
-                    role = turn.get("role", "unknown")
-                    content = turn.get("content", "")
-                    context += f"{role}: {content}\n"
+                for event in events:
+                    payload = event.get("payload", {})
+                    messages = payload.get("messages", [])
+                    for msg in messages:
+                        role = msg.get("role", "unknown")
+                        content = msg.get("content", "")
+                        context += f"{role}: {content}\n"
                 print(f"[MEMORY] Context length: {len(context)} characters", flush=True)
+                print(f"[MEMORY] Context preview: {context[:200]}...", flush=True)
             else:
                 print("[MEMORY] No previous conversation history found", flush=True)
         except Exception as e:
@@ -365,19 +373,32 @@ def travel_orchestrator_entrypoint(payload):
         # Store conversation in memory
         print("[MEMORY] Storing conversation in memory...", flush=True)
         try:
-            print(f"[MEMORY] Calling create_event with memory_id={MEMORY_ID}, actor_id={ACTOR_ID}, session_id={session_id}", flush=True)
+            from datetime import datetime
+            import uuid
+            
+            print(f"[MEMORY] Calling create_event with memoryId={MEMORY_ID}, actorId={ACTOR_ID}, sessionId={session_id}", flush=True)
             print(f"[MEMORY] User message length: {len(user_input)}, Assistant message length: {len(result)}", flush=True)
             
-            memory_client.create_event(
-                memory_id=MEMORY_ID,
-                actor_id=ACTOR_ID,
-                session_id=session_id,
-                messages=[
-                    (user_input, "user"),
-                    (result, "assistant")
+            # Create payload with conversation messages
+            payload = {
+                "messages": [
+                    {"role": "user", "content": user_input},
+                    {"role": "assistant", "content": result}
                 ]
+            }
+            
+            # Call create_event with correct parameter names (camelCase)
+            response = memory_client.create_event(
+                memoryId=MEMORY_ID,
+                actorId=ACTOR_ID,
+                sessionId=session_id,
+                eventTimestamp=datetime.utcnow(),
+                payload=payload,
+                clientToken=str(uuid.uuid4())
             )
-            print("[MEMORY] Conversation stored successfully", flush=True)
+            
+            event_id = response.get("event", {}).get("eventId", "unknown")
+            print(f"[MEMORY] Conversation stored successfully with event ID: {event_id}", flush=True)
         except Exception as e:
             print(f"[MEMORY] ERROR storing conversation: {type(e).__name__}: {str(e)}", flush=True)
             import traceback

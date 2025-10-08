@@ -197,28 +197,33 @@ def handle_get_history(event: Dict[str, Any]) -> Dict[str, Any]:
         from bedrock_agentcore.memory import MemoryClient
         memory_client = MemoryClient()
         
-        # Retrieve last 5 conversation turns
-        history = memory_client.get_last_k_turns(
-            memory_id=MEMORY_ID,
-            actor_id=ACTOR_ID,
-            session_id=session_id,
+        # Retrieve last 5 conversation turns (use camelCase parameter names)
+        response = memory_client.get_last_k_turns(
+            memoryId=MEMORY_ID,
+            actorId=ACTOR_ID,
+            sessionId=session_id,
             k=5,
-            branch_name=BRANCH_NAME
+            branchName=BRANCH_NAME
         )
         
-        print(f"Retrieved {len(history)} conversation turns")
+        # Extract events from response
+        events = response.get("events", [])
+        print(f"Retrieved {len(events)} conversation events")
         
         # Format history for frontend
         messages = []
-        for turn in history:
-            role = turn.get("role", "unknown")
-            content = turn.get("content", "")
-            
-            # Map roles to frontend format
-            if role == "user":
-                messages.append({"text": content, "type": "user"})
-            elif role == "assistant":
-                messages.append({"text": content, "type": "assistant"})
+        for event in events:
+            payload = event.get("payload", {})
+            event_messages = payload.get("messages", [])
+            for msg in event_messages:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                
+                # Map roles to frontend format
+                if role == "user":
+                    messages.append({"text": content, "type": "user"})
+                elif role == "assistant":
+                    messages.append({"text": content, "type": "assistant"})
         
         return create_response(200, {
             "messages": messages,
