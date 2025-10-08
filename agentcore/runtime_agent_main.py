@@ -254,6 +254,7 @@ Always provide real, well-known attractions and remind users to verify current i
 
 # Store session-specific agents (will be created per session)
 session_agents = {}
+session_orchestrators = {}
 
 def get_or_create_agents(session_id: str):
     """Get or create agents for a specific session."""
@@ -270,6 +271,53 @@ def get_or_create_agents(session_id: str):
         print(f"[AGENT] Created specialized agents for session: {session_id}", flush=True)
     
     return session_agents[session_id]
+
+
+def get_or_create_orchestrator(session_id: str):
+    """Get or create orchestrator agent with memory for a specific session."""
+    if session_id not in session_orchestrators:
+        orchestrator_actor_id = f"orchestrator-{session_id}"
+        
+        # Create memory hooks for orchestrator
+        orchestrator_memory_hooks = ShortTermMemoryHook(memory_client, MEMORY_ID)
+        
+        orchestrator = Agent(
+            name="TravelOrchestrator",
+            model="eu.amazon.nova-micro-v1:0",
+            tools=[flight_booking_tool, hotel_booking_tool, activities_tool],
+            hooks=[orchestrator_memory_hooks],
+            state={"actor_id": orchestrator_actor_id, "session_id": session_id}
+        )
+        
+        orchestrator.system_prompt = """You are a travel planning orchestrator that coordinates specialized agents.
+
+CRITICAL: You MUST delegate to specialized agents for ANY travel-related requests. Do NOT answer directly.
+
+Your role:
+- Immediately identify which specialized agent(s) to call based on user request
+- Delegate to: flight_booking_tool, hotel_booking_tool, activities_tool
+- Pass the user's full request to the appropriate tool(s)
+- Synthesize responses from agents into a cohesive answer
+
+Delegation rules:
+- ANY mention of flights, airlines, flying → ALWAYS call flight_booking_tool
+- ANY mention of hotels, accommodation, lodging → ALWAYS call hotel_booking_tool  
+- ANY mention of activities, attractions, things to do → ALWAYS call activities_tool
+- For complete trip planning → Call multiple tools as needed
+
+Examples:
+- User: "I want to go to Paris" → Call flight_booking_tool("User wants to go to Paris, needs flight information")
+- User: "Find hotels in Tokyo" → Call hotel_booking_tool("User needs hotels in Tokyo")
+- User: "Plan a trip to Rome" → Call all three tools with the request
+- User: "What about flights?" → Call flight_booking_tool with the full conversation context
+
+IMPORTANT: The specialized agents have memory and will remember previous conversation context. 
+Always delegate to them - they will provide better, context-aware responses than you can."""
+        
+        session_orchestrators[session_id] = orchestrator
+        print(f"[AGENT] Created orchestrator with memory for session: {session_id}", flush=True)
+    
+    return session_orchestrators[session_id]
 
 
 # Convert agents to tools for the orchestrator
@@ -351,43 +399,9 @@ def activities_tool(query: str) -> str:
         return f"Error searching activities: {str(e)}"
 
 
-# Create the orchestrator agent with specialized agents as tools
-print("[AGENT] Creating travel orchestrator agent...", flush=True)
-
-agent = Agent(
-    name="TravelOrchestrator",
-    model="eu.amazon.nova-micro-v1:0",
-    tools=[flight_booking_tool, hotel_booking_tool, activities_tool],
-)
-
-agent.system_prompt = """You are a travel planning orchestrator that coordinates specialized agents.
-
-CRITICAL: You MUST delegate to specialized agents for ANY travel-related requests. Do NOT answer directly.
-
-Your role:
-- Immediately identify which specialized agent(s) to call based on user request
-- Delegate to: flight_booking_tool, hotel_booking_tool, activities_tool
-- Pass the user's full request to the appropriate tool(s)
-- Synthesize responses from agents into a cohesive answer
-
-Delegation rules:
-- ANY mention of flights, airlines, flying → ALWAYS call flight_booking_tool
-- ANY mention of hotels, accommodation, lodging → ALWAYS call hotel_booking_tool  
-- ANY mention of activities, attractions, things to do → ALWAYS call activities_tool
-- For complete trip planning → Call multiple tools as needed
-
-Examples:
-- User: "I want to go to Paris" → Call flight_booking_tool("User wants to go to Paris, needs flight information")
-- User: "Find hotels in Tokyo" → Call hotel_booking_tool("User needs hotels in Tokyo")
-- User: "Plan a trip to Rome" → Call all three tools with the request
-- User: "What about flights?" → Call flight_booking_tool with the full conversation context
-
-IMPORTANT: The specialized agents have memory and will remember previous conversation context. 
-Always delegate to them - they will provide better, context-aware responses than you can."""
-
-print("[AGENT] Orchestrator agent created successfully!", flush=True)
-print(f"[AGENT] Agent name: {agent.name}", flush=True)
-print(f"[AGENT] Specialized agents: FlightBookingAgent, HotelBookingAgent, ActivitiesAgent", flush=True)
+# Orchestrator agents will be created per session with memory hooks
+print("[AGENT] Orchestrator agent factory ready", flush=True)
+print("[AGENT] Specialized agents: FlightBookingAgent, HotelBookingAgent, ActivitiesAgent", flush=True)
 print(f"[AGENT] Tools: {[tool.__name__ for tool in [flight_booking_tool, hotel_booking_tool, activities_tool]]}", flush=True)
 
 
@@ -440,11 +454,14 @@ def travel_orchestrator_entrypoint(payload):
         hotel_booking_tool._session_id = session_id
         activities_tool._session_id = session_id
         
+        # Get or create orchestrator with memory for this session
+        orchestrator = get_or_create_orchestrator(session_id)
+        
         # Invoke the orchestrator agent
-        # Memory is handled automatically by Strands hooks in specialized agents
+        # Memory is handled automatically by Strands hooks in orchestrator AND specialized agents
         print("[ENTRYPOINT] Invoking orchestrator agent...", flush=True)
-        print("[MEMORY] Memory operations handled by Strands hooks", flush=True)
-        response = agent(user_input)
+        print("[MEMORY] Memory operations handled by Strands hooks (orchestrator + specialized agents)", flush=True)
+        response = orchestrator(user_input)
         print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
         
         # Extract text from response
