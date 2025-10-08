@@ -15,13 +15,13 @@ MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
 ACTOR_ID = "travel_orchestrator"
 BRANCH_NAME = "main"
 
-# Create the AgentCore app with memory configuration
-print("[MEMORY] Initializing AgentCore app with memory...", flush=True)
-app = BedrockAgentCoreApp(
-    memory_id=MEMORY_ID,
-    actor_id=ACTOR_ID,
-    branch_name=BRANCH_NAME
-)
+# Create the AgentCore app
+print("[MEMORY] Initializing AgentCore app...", flush=True)
+app = BedrockAgentCoreApp()
+
+# Initialize memory client for manual operations
+from bedrock_agentcore.memory import MemoryClient
+memory_client = MemoryClient()
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
 print(f"[MEMORY] Actor ID: {ACTOR_ID}", flush=True)
 print(f"[MEMORY] Branch: {BRANCH_NAME}", flush=True)
@@ -328,14 +328,19 @@ def travel_orchestrator_entrypoint(payload):
         sys.stdout.flush()
         sys.stderr.flush()
         
-        # AgentCore automatically handles memory retrieval and context
-        # No need to manually retrieve history - it's handled by the app
-        print("[MEMORY] AgentCore will automatically handle memory operations", flush=True)
+        # Use agent with memory integration
+        print("[MEMORY] Using agent with memory integration...", flush=True)
         
-        # Invoke the orchestrator agent
-        # AgentCore will automatically inject conversation history
+        # Invoke the orchestrator agent with memory context
+        # The agent will use memory_client to retrieve and store conversations
         print("[ENTRYPOINT] Invoking orchestrator agent...", flush=True)
-        response = agent(user_input)
+        response = agent(
+            user_input,
+            memory_id=MEMORY_ID,
+            actor_id=ACTOR_ID,
+            session_id=session_id,
+            branch_name=BRANCH_NAME
+        )
         print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
         
         # Extract text from response
