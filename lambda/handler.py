@@ -86,8 +86,10 @@ def lambda_handler(event: Dict[str, Any], context: Any):
         
         # Prepare payload as JSON bytes
         # AgentCore entrypoint expects 'input' and 'session_id' keys
+        # Note: Using both sessionId and session_id for compatibility
         payload = json.dumps({
             "input": message,
+            "sessionId": session_id,
             "session_id": session_id
         }).encode('utf-8')
         

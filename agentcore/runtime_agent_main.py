@@ -293,20 +293,28 @@ def travel_orchestrator_entrypoint(payload):
     Returns:
         String response from the orchestrator agent
     """
-    print("=" * 80, flush=True)
+    # Force immediate output
+    import sys
+    import os
+    os.environ['PYTHONUNBUFFERED'] = '1'
+    
+    print("\n" + "=" * 80, flush=True)
     print("[ENTRYPOINT] *** ENTRYPOINT CALLED ***", flush=True)
-    print("=" * 80, flush=True)
+    print("=" * 80 + "\n", flush=True)
     sys.stdout.flush()
+    sys.stderr.flush()
     
     try:
         print(f"[ENTRYPOINT] Received payload: {payload}", flush=True)
         print(f"[ENTRYPOINT] Payload type: {type(payload)}", flush=True)
         print(f"[ENTRYPOINT] Payload keys: {list(payload.keys()) if isinstance(payload, dict) else 'Not a dict'}", flush=True)
         sys.stdout.flush()
+        sys.stderr.flush()
         
         # Extract user input and session_id from payload
+        # Handle both snake_case and camelCase for compatibility
         user_input = payload.get("input") or payload.get("prompt", "")
-        session_id = payload.get("session_id", "default_session")
+        session_id = payload.get("session_id") or payload.get("sessionId", "default_session")
         
         if not user_input:
             print("[ENTRYPOINT] WARNING: No input found in payload", flush=True)
@@ -314,6 +322,8 @@ def travel_orchestrator_entrypoint(payload):
         
         print(f"[ENTRYPOINT] User input: {user_input}", flush=True)
         print(f"[ENTRYPOINT] Session ID: {session_id}", flush=True)
+        sys.stdout.flush()
+        sys.stderr.flush()
         
         # Retrieve conversation history from memory
         print("[MEMORY] Retrieving conversation history...", flush=True)
@@ -423,16 +433,20 @@ def travel_orchestrator_entrypoint(payload):
         return f"I apologize, but I encountered an error: {str(e)}"
 
 
-# Test the entrypoint to verify it's registered
+# Test the entrypoint to verify it's registered and working
 print("[RUNTIME] Testing entrypoint registration...", flush=True)
 try:
-    test_payload = {"input": "test", "session_id": "test_session"}
-    print(f"[RUNTIME] Test payload: {test_payload}", flush=True)
-    # Don't actually call it, just verify it exists
     print(f"[RUNTIME] Entrypoint function: {travel_orchestrator_entrypoint}", flush=True)
     print("[RUNTIME] Entrypoint registered successfully!", flush=True)
+    
+    # Try a test call to verify it works
+    print("[RUNTIME] Running test invocation...", flush=True)
+    test_result = travel_orchestrator_entrypoint({"input": "test", "session_id": "test_startup"})
+    print(f"[RUNTIME] Test invocation successful! Response length: {len(test_result)}", flush=True)
 except Exception as e:
-    print(f"[RUNTIME] ERROR: Entrypoint registration failed: {e}", flush=True)
+    print(f"[RUNTIME] ERROR during test: {type(e).__name__}: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
 
 # Run the AgentCore app
 if __name__ == "__main__":
