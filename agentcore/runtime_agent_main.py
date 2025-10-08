@@ -464,7 +464,7 @@ def travel_orchestrator_entrypoint(payload):
 # Verify entrypoint is registered
 print("[RUNTIME] Entrypoint registered successfully!", flush=True)
 print(f"[RUNTIME] Memory ID: {MEMORY_ID}", flush=True)
-print(f"[RUNTIME] Actor ID: {ACTOR_ID}", flush=True)
+print("[RUNTIME] Actor IDs: Dynamically created per session (flight-*, hotel-*, activities-*)", flush=True)
 print("[RUNTIME] Ready to process requests!", flush=True)
 
 # Run the AgentCore app

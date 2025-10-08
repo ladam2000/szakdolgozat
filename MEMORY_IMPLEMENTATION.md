@@ -1,57 +1,14 @@
-# AgentCore Memory Implementation - AWS Pattern
+# AgentCore Memory Implementation - AWS Pattern with Strands Hooks
 
 ## Changes Made
 
 Following the AWS sample from: https://github.com/awslabs/amazon-bedrock-agentcore-samples/blob/main/01-tutorials/04-AgentCore-memory/01-short-term-memory/02-multi-agent/with-strands-agent/travel-planning-agent.ipynb
 
-### Key Change: Memory Configuration in BedrockAgentCoreApp
+### Key Change: Using Strands Hooks for Memory Management
 
-**Before (Manual Memory Management):**
+**Before (Manual Memory Management in Entrypoint):**
 ```python
-app = BedrockAgentCoreApp()
-memory_client = MemoryClient()
-
-# Manual retrieval
-history = memory_client.get_last_k_turns(...)
-# Manual storage
-memory_client.create_event(...)
-```
-
-**After (Automatic Memory Management):**
-```python
-app = BedrockAgentCoreApp(
-    memory_id=MEMORY_ID,
-    actor_id=ACTOR_ID,
-    branch_name=BRANCH_NAME
-)
-
-# AgentCore automatically handles:
-# - Retrieving conversation history
-# - Injecting context into agent calls
-# - Storing new conversations
-```
-
-## How It Works
-
-### 1. App Initialization
-```python
-app = BedrockAgentCoreApp(
-    memory_id="memory_rllrl-lfg7zBH6MH",
-    actor_id="travel_orchestrator",
-    branch_name="main"
-)
-```
-
-When you configure memory at the app level, AgentCore automatically:
-- Retrieves conversation history for the session
-- Injects it as context before agent invocation
-- Stores the conversation after agent response
-
-### 2. Entrypoint Simplification
-
-**Before:**
-```python
-# Manually retrieve history
+# Manual retrieval in entrypoint
 history = memory_client.get_last_k_turns(...)
 context = format_history(history)
 agent_input = f"{context}\n\n{user_input}"
@@ -59,36 +16,110 @@ agent_input = f"{context}\n\n{user_input}"
 # Call agent
 response = agent(agent_input)
 
-# Manually store
+# Manual storage
 memory_client.create_event(...)
 ```
 
-**After:**
+**After (Automatic Memory via Strands Hooks):**
 ```python
-# Just call the agent - AgentCore handles everything
+# Create memory hook provider
+class ShortTermMemoryHook(HookProvider):
+    def on_agent_initialized(self, event):
+        # Automatically load conversation history
+        # Inject into agent's system prompt
+        
+    def on_message_added(self, event):
+        # Automatically store new messages
+
+# Attach hooks to agents
+agent = Agent(
+    hooks=[ShortTermMemoryHook(memory_client, MEMORY_ID)],
+    state={"actor_id": actor_id, "session_id": session_id}
+)
+
+# Just call the agent - hooks handle everything
 response = agent(user_input)
 ```
 
-### 3. Session Management
+## How It Works
 
-AgentCore uses the `session_id` from the payload to:
-- Retrieve the correct conversation history
-- Store new messages in the right session
-- Keep conversations isolated per user
+### 1. Memory Hook Provider
+
+The `ShortTermMemoryHook` class implements two key lifecycle hooks:
+
+```python
+class ShortTermMemoryHook(HookProvider):
+    def on_agent_initialized(self, event: AgentInitializedEvent):
+        """Load conversation history when agent starts"""
+        # Get actor_id and session_id from agent.state
+        # Retrieve last K turns from memory
+        # Inject history into agent's system prompt
+        
+    def on_message_added(self, event: MessageAddedEvent):
+        """Store new messages in memory"""
+        # Get the latest message
+        # Store it in memory with actor_id and session_id
+```
+
+### 2. Agent Creation with Memory
+
+Each specialized agent is created with:
+- Memory hooks attached
+- State containing `actor_id` and `session_id`
+
+```python
+memory_hooks = ShortTermMemoryHook(memory_client, MEMORY_ID)
+
+agent = Agent(
+    name="FlightBookingAgent",
+    model="eu.amazon.nova-micro-v1:0",
+    hooks=[memory_hooks],
+    state={"actor_id": "flight-session123", "session_id": "session123"}
+)
+```
+
+### 3. Automatic Memory Operations
+
+When you call an agent:
+1. **on_agent_initialized** hook fires:
+   - Retrieves conversation history from memory
+   - Injects it into the agent's system prompt
+   
+2. Agent processes the request with full context
+
+3. **on_message_added** hook fires:
+   - Stores the new message in memory
+   - Associates it with the correct actor_id and session_id
+
+### 4. Session Management
+
+Each session gets its own set of specialized agents:
+- `flight-{session_id}` - Flight booking agent
+- `hotel-{session_id}` - Hotel booking agent  
+- `activities-{session_id}` - Activities agent
+
+All agents in a session share the same `session_id` but have unique `actor_id` values, allowing:
+- Isolated conversations per session
+- Specialized memory per agent type
+- Shared context across the session
 
 ## Benefits
 
-1. **Simpler Code**: No manual memory operations
-2. **Automatic Context**: History is automatically injected
-3. **Error Handling**: AgentCore handles memory errors gracefully
-4. **Consistent**: Follows AWS best practices
+1. **Lifecycle Integration**: Memory operations tied to agent lifecycle events
+2. **Automatic Context**: History automatically injected before agent runs
+3. **Automatic Storage**: New messages automatically stored after agent responds
+4. **Per-Agent Memory**: Each specialized agent maintains its own conversation history
+5. **Consistent**: Follows AWS reference implementation exactly
 
 ## Configuration
 
 ### Memory Settings
 - **Memory ID**: `memory_rllrl-lfg7zBH6MH`
-- **Actor ID**: `travel_orchestrator`
 - **Branch**: `main`
+- **Actor IDs**: Dynamically created per session:
+  - `flight-{session_id}` for flight agent
+  - `hotel-{session_id}` for hotel agent
+  - `activities-{session_id}` for activities agent
 
 ### Payload Format
 ```json
@@ -106,43 +137,88 @@ Or with camelCase (both supported):
 }
 ```
 
+### How Actor IDs Work
+
+Each session creates unique actor IDs for specialized agents:
+- Session `abc123` creates: `flight-abc123`, `hotel-abc123`, `activities-abc123`
+- Session `xyz789` creates: `flight-xyz789`, `hotel-xyz789`, `activities-xyz789`
+
+This ensures:
+- Each session has isolated conversations
+- Each specialized agent maintains its own memory within the session
+- Memory is properly scoped and doesn't leak between sessions
+
 ## Expected Behavior
 
 ### First Message in Session
 ```
-[MEMORY] AgentCore will automatically handle memory operations
-[ENTRYPOINT] Invoking orchestrator agent...
-[MEMORY] AgentCore will automatically store this conversation
+[ENTRYPOINT] Session ID: session_123
+[MEMORY] Memory operations handled by Strands hooks
+[AGENT] Created specialized agents for session: session_123
+[FLIGHT AGENT] Processing: Find flights to Paris
+INFO - No previous conversation history found
+INFO - ✅ Stored message in memory: user
+INFO - ✅ Stored message in memory: assistant
 ```
 
-AgentCore:
-- Finds no previous history
-- Calls agent with just the user input
-- Stores the conversation
+What happens:
+1. Orchestrator receives user input
+2. Delegates to flight agent (creates agent with hooks)
+3. `on_agent_initialized` hook: No history found (first message)
+4. Agent processes request
+5. `on_message_added` hook: Stores conversation in memory
 
-### Subsequent Messages
+### Subsequent Messages in Same Session
 ```
-[MEMORY] AgentCore will automatically handle memory operations
-[ENTRYPOINT] Invoking orchestrator agent...
-[MEMORY] AgentCore will automatically store this conversation
+[ENTRYPOINT] Session ID: session_123
+[MEMORY] Memory operations handled by Strands hooks
+[FLIGHT AGENT] Processing: What about hotels?
+INFO - Context from memory: User: Find flights to Paris...
+INFO - ✅ Loaded 2 recent messages
+INFO - ✅ Stored message in memory: user
+INFO - ✅ Stored message in memory: assistant
 ```
 
-AgentCore:
-- Retrieves previous conversation history
-- Injects it as context before calling the agent
-- Agent sees full conversation history
-- Stores the new exchange
+What happens:
+1. Orchestrator receives follow-up
+2. Delegates to hotel agent (reuses or creates agent)
+3. `on_agent_initialized` hook: Retrieves previous conversation
+4. Hook injects history into agent's system prompt
+5. Agent processes with full context (remembers Paris!)
+6. `on_message_added` hook: Stores new exchange
 
 ## Verification
 
 To verify memory is working:
 
 1. **Send first message**: "I want to go to Paris"
+   - Should get flight recommendations
+   
 2. **Send follow-up**: "What about hotels?" (should remember Paris)
-3. **Close browser and reopen**
-4. **Send message**: "What were we discussing?" (should remember Paris conversation)
+   - Should recommend Paris hotels without asking destination again
+   
+3. **Send another**: "And activities?" (should still remember Paris)
+   - Should suggest Paris activities
+   
+4. **Close browser and reopen with same session**
+5. **Send message**: "What were we discussing?" 
+   - Should remember the entire Paris conversation
 
-If step 4 works, memory persistence is functioning correctly!
+If steps 2-5 work, memory is functioning correctly!
+
+### Checking Memory in AWS Console
+
+You can verify memory storage:
+
+```bash
+aws bedrock-agentcore list-events \
+  --memory-id memory_rllrl-lfg7zBH6MH \
+  --actor-id flight-session_123 \
+  --session-id session_123 \
+  --region eu-central-1
+```
+
+Replace `session_123` with your actual session ID from the browser.
 
 ## Troubleshooting
 
