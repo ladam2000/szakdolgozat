@@ -208,13 +208,13 @@ def handle_get_history(event: Dict[str, Any]) -> Dict[str, Any]:
         from bedrock_agentcore.memory import MemoryClient
         memory_client = MemoryClient()
         
-        # Retrieve last 5 conversation turns (use camelCase parameter names)
+        # Retrieve last 5 conversation turns (use snake_case parameter names)
         response = memory_client.get_last_k_turns(
-            memoryId=MEMORY_ID,
-            actorId=ACTOR_ID,
-            sessionId=session_id,
+            memory_id=MEMORY_ID,
+            actor_id=ACTOR_ID,
+            session_id=session_id,
             k=5,
-            branchName=BRANCH_NAME
+            branch_name=BRANCH_NAME
         )
         
         # Extract events from response

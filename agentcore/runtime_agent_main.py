@@ -329,15 +329,15 @@ def travel_orchestrator_entrypoint(payload):
         print("[MEMORY] Retrieving conversation history...", flush=True)
         context = ""
         try:
-            print(f"[MEMORY] Calling get_last_k_turns with memoryId={MEMORY_ID}, actorId={ACTOR_ID}, sessionId={session_id}", flush=True)
+            print(f"[MEMORY] Calling get_last_k_turns with memory_id={MEMORY_ID}, actor_id={ACTOR_ID}, session_id={session_id}", flush=True)
             
-            # Call with correct parameter names (camelCase)
+            # Call with correct parameter names (snake_case)
             response = memory_client.get_last_k_turns(
-                memoryId=MEMORY_ID,
-                actorId=ACTOR_ID,
-                sessionId=session_id,
+                memory_id=MEMORY_ID,
+                actor_id=ACTOR_ID,
+                session_id=session_id,
                 k=10,  # Get last 10 conversation turns
-                branchName=BRANCH_NAME
+                branch_name=BRANCH_NAME
             )
             
             # Extract events from response
@@ -394,25 +394,18 @@ def travel_orchestrator_entrypoint(payload):
             from datetime import datetime
             import uuid
             
-            print(f"[MEMORY] Calling create_event with memoryId={MEMORY_ID}, actorId={ACTOR_ID}, sessionId={session_id}", flush=True)
+            print(f"[MEMORY] Calling create_event with memory_id={MEMORY_ID}, actor_id={ACTOR_ID}, session_id={session_id}", flush=True)
             print(f"[MEMORY] User message length: {len(user_input)}, Assistant message length: {len(result)}", flush=True)
             
-            # Create payload with conversation messages
-            payload = {
-                "messages": [
-                    {"role": "user", "content": user_input},
-                    {"role": "assistant", "content": result}
-                ]
-            }
-            
-            # Call create_event with correct parameter names (camelCase)
+            # Call create_event with correct parameter names (snake_case)
             response = memory_client.create_event(
-                memoryId=MEMORY_ID,
-                actorId=ACTOR_ID,
-                sessionId=session_id,
-                eventTimestamp=datetime.utcnow(),
-                payload=payload,
-                clientToken=str(uuid.uuid4())
+                memory_id=MEMORY_ID,
+                actor_id=ACTOR_ID,
+                session_id=session_id,
+                messages=[
+                    (user_input, "user"),
+                    (result, "assistant")
+                ]
             )
             
             event_id = response.get("event", {}).get("eventId", "unknown")
