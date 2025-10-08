@@ -15,13 +15,16 @@ MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
 ACTOR_ID = "travel_orchestrator"
 BRANCH_NAME = "main"
 
-# Create the AgentCore app
-app = BedrockAgentCoreApp()
-
-# Initialize memory client
-print("[MEMORY] Initializing memory client...", flush=True)
-memory_client = MemoryClient()
+# Create the AgentCore app with memory configuration
+print("[MEMORY] Initializing AgentCore app with memory...", flush=True)
+app = BedrockAgentCoreApp(
+    memory_id=MEMORY_ID,
+    actor_id=ACTOR_ID,
+    branch_name=BRANCH_NAME
+)
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
+print(f"[MEMORY] Actor ID: {ACTOR_ID}", flush=True)
+print(f"[MEMORY] Branch: {BRANCH_NAME}", flush=True)
 
 
 # Specialized Agent 1: Flight Booking Agent
@@ -325,60 +328,14 @@ def travel_orchestrator_entrypoint(payload):
         sys.stdout.flush()
         sys.stderr.flush()
         
-        # Retrieve conversation history from memory
-        print("[MEMORY] Retrieving conversation history...", flush=True)
-        context = ""
-        try:
-            print(f"[MEMORY] Calling get_last_k_turns with memory_id={MEMORY_ID}, actor_id={ACTOR_ID}, session_id={session_id}", flush=True)
-            
-            # Call with correct parameter names (snake_case)
-            response = memory_client.get_last_k_turns(
-                memory_id=MEMORY_ID,
-                actor_id=ACTOR_ID,
-                session_id=session_id,
-                k=10,  # Get last 10 conversation turns
-                branch_name=BRANCH_NAME
-            )
-            
-            # Extract events from response
-            events = response.get("events", [])
-            print(f"[MEMORY] Retrieved {len(events)} conversation events", flush=True)
-            
-            # Format history for context
-            if events and len(events) > 0:
-                context = "\n\nPrevious conversation:\n"
-                for event in events:
-                    payload = event.get("payload", {})
-                    messages = payload.get("messages", [])
-                    for msg in messages:
-                        role = msg.get("role", "unknown")
-                        content = msg.get("content", "")
-                        context += f"{role}: {content}\n"
-                print(f"[MEMORY] Context length: {len(context)} characters", flush=True)
-                print(f"[MEMORY] Context preview: {context[:200]}...", flush=True)
-            else:
-                print("[MEMORY] No previous conversation history found", flush=True)
-        except Exception as e:
-            error_msg = str(e)
-            print(f"[MEMORY] ERROR retrieving history: {type(e).__name__}: {error_msg}", flush=True)
-            if "ResourceNotFoundException" in str(type(e)) or "Memory not found" in error_msg:
-                print(f"[MEMORY] Memory {MEMORY_ID} not found or not accessible", flush=True)
-                print(f"[MEMORY] Please ensure:", flush=True)
-                print(f"[MEMORY]   1. Memory exists: arn:aws:bedrock-agentcore:eu-central-1:206631439304:memory/{MEMORY_ID}", flush=True)
-                print(f"[MEMORY]   2. AgentCore runtime has permission to access the memory", flush=True)
-                print(f"[MEMORY]   3. Memory is associated with the AgentCore runtime", flush=True)
-            import traceback
-            traceback.print_exc()
-            context = ""
-        
-        # Prepare input with context
-        agent_input = user_input
-        if context:
-            agent_input = f"{context}\n\nCurrent request: {user_input}"
+        # AgentCore automatically handles memory retrieval and context
+        # No need to manually retrieve history - it's handled by the app
+        print("[MEMORY] AgentCore will automatically handle memory operations", flush=True)
         
         # Invoke the orchestrator agent
+        # AgentCore will automatically inject conversation history
         print("[ENTRYPOINT] Invoking orchestrator agent...", flush=True)
-        response = agent(agent_input)
+        response = agent(user_input)
         print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
         
         # Extract text from response
@@ -426,6 +383,9 @@ def travel_orchestrator_entrypoint(payload):
             import traceback
             traceback.print_exc()
         
+        # AgentCore automatically stores the conversation in memory
+        # No need to manually call create_event
+        print("[MEMORY] AgentCore will automatically store this conversation", flush=True)
         print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
         return result
         
