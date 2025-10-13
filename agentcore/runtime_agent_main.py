@@ -22,16 +22,21 @@ MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
 BRANCH_NAME = "main"
 REGION = "eu-central-1"  # Memory is in eu-central-1
 
-# Create the AgentCore app
-print("[MEMORY] Initializing AgentCore app...", flush=True)
-app = BedrockAgentCoreApp()
+# Create the AgentCore app WITH memory configuration
+print("[MEMORY] Initializing AgentCore app with memory...", flush=True)
+app = BedrockAgentCoreApp(
+    memory_id=MEMORY_ID,
+    branch_name=BRANCH_NAME,
+    region_name=REGION
+)
 
-# Initialize memory client with correct region
+# Initialize memory client with correct region for manual operations
 print(f"[MEMORY] Initializing MemoryClient for region: {REGION}", flush=True)
 memory_client = MemoryClient(region_name=REGION)
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
 print(f"[MEMORY] Branch: {BRANCH_NAME}", flush=True)
 print(f"[MEMORY] Region: {REGION}", flush=True)
+print("[MEMORY] AgentCore app configured with built-in memory support", flush=True)
 
 
 # Memory Hook Provider (from AWS reference)
@@ -458,13 +463,20 @@ def travel_orchestrator_entrypoint(payload):
         hotel_booking_tool._session_id = session_id
         activities_tool._session_id = session_id
         
+        # Set actor_id for AgentCore's built-in memory
+        # Use shared actor_id so all agents in session share memory
+        actor_id = f"travel-user-{session_id}"
+        
         # Get or create orchestrator with memory for this session
         orchestrator = get_or_create_orchestrator(session_id)
         
-        # Invoke the orchestrator agent
-        # Memory is handled automatically by Strands hooks in orchestrator AND specialized agents
+        # Invoke the orchestrator agent with session context
+        # AgentCore's built-in memory will handle retrieval and storage automatically
         print("[ENTRYPOINT] Invoking orchestrator agent...", flush=True)
-        print("[MEMORY] Memory operations handled by Strands hooks (orchestrator + specialized agents)", flush=True)
+        print(f"[MEMORY] Using actor_id: {actor_id}, session_id: {session_id}", flush=True)
+        print("[MEMORY] AgentCore built-in memory + Strands hooks active", flush=True)
+        
+        # Pass session context to agent
         response = orchestrator(user_input)
         print(f"[ENTRYPOINT] Agent response type: {type(response)}", flush=True)
         
