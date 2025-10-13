@@ -262,16 +262,16 @@ session_orchestrators = {}
 def get_or_create_agents(session_id: str):
     """Get or create agents for a specific session."""
     if session_id not in session_agents:
-        flight_actor_id = f"flight-{session_id}"
-        hotel_actor_id = f"hotel-{session_id}"
-        activities_actor_id = f"activities-{session_id}"
+        # Use SAME actor_id for all agents to share memory!
+        shared_actor_id = f"travel-user-{session_id}"
         
         session_agents[session_id] = {
-            'flight': create_flight_agent(flight_actor_id, session_id),
-            'hotel': create_hotel_agent(hotel_actor_id, session_id),
-            'activities': create_activities_agent(activities_actor_id, session_id)
+            'flight': create_flight_agent(shared_actor_id, session_id),
+            'hotel': create_hotel_agent(shared_actor_id, session_id),
+            'activities': create_activities_agent(shared_actor_id, session_id)
         }
         print(f"[AGENT] Created specialized agents for session: {session_id}", flush=True)
+        print(f"[AGENT] Shared actor_id: {shared_actor_id}", flush=True)
     
     return session_agents[session_id]
 
@@ -279,7 +279,8 @@ def get_or_create_agents(session_id: str):
 def get_or_create_orchestrator(session_id: str):
     """Get or create orchestrator agent with memory for a specific session."""
     if session_id not in session_orchestrators:
-        orchestrator_actor_id = f"orchestrator-{session_id}"
+        # Use SAME actor_id as specialized agents to share memory!
+        shared_actor_id = f"travel-user-{session_id}"
         
         # Create memory hooks for orchestrator
         orchestrator_memory_hooks = ShortTermMemoryHook(memory_client, MEMORY_ID)
@@ -289,7 +290,7 @@ def get_or_create_orchestrator(session_id: str):
             model="eu.amazon.nova-micro-v1:0",
             tools=[flight_booking_tool, hotel_booking_tool, activities_tool],
             hooks=[orchestrator_memory_hooks],
-            state={"actor_id": orchestrator_actor_id, "session_id": session_id}
+            state={"actor_id": shared_actor_id, "session_id": session_id}
         )
         
         orchestrator.system_prompt = """You are a travel planning orchestrator that coordinates specialized agents.
