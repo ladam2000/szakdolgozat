@@ -22,21 +22,17 @@ MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
 BRANCH_NAME = "main"
 REGION = "eu-central-1"  # Memory is in eu-central-1
 
-# Create the AgentCore app WITH memory configuration
-print("[MEMORY] Initializing AgentCore app with memory...", flush=True)
-app = BedrockAgentCoreApp(
-    memory_id=MEMORY_ID,
-    branch_name=BRANCH_NAME,
-    region_name=REGION
-)
+# Create the AgentCore app
+print("[MEMORY] Initializing AgentCore app...", flush=True)
+app = BedrockAgentCoreApp()
 
-# Initialize memory client with correct region for manual operations
+# Initialize memory client with correct region
 print(f"[MEMORY] Initializing MemoryClient for region: {REGION}", flush=True)
 memory_client = MemoryClient(region_name=REGION)
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
 print(f"[MEMORY] Branch: {BRANCH_NAME}", flush=True)
 print(f"[MEMORY] Region: {REGION}", flush=True)
-print("[MEMORY] AgentCore app configured with built-in memory support", flush=True)
+print("[MEMORY] Memory will be managed via Strands hooks", flush=True)
 
 
 # Memory Hook Provider (from AWS reference)
@@ -52,18 +48,24 @@ class ShortTermMemoryHook(HookProvider):
             actor_id = event.agent.state.get("actor_id")
             session_id = event.agent.state.get("session_id")
             
+            print(f"[MEMORY HOOK] on_agent_initialized called", flush=True)
+            print(f"[MEMORY HOOK] actor_id: {actor_id}, session_id: {session_id}", flush=True)
+            
             if not actor_id or not session_id:
-                logger.warning("Missing actor_id or session_id in agent state")
+                print("[MEMORY HOOK] WARNING: Missing actor_id or session_id", flush=True)
                 return
             
-            # Get last 5 conversation turns
+            # Get last 10 conversation turns (increased from 5)
+            print(f"[MEMORY HOOK] Retrieving last 10 turns from memory...", flush=True)
             recent_turns = self.memory_client.get_last_k_turns(
                 memory_id=self.memory_id,
                 actor_id=actor_id,
                 session_id=session_id,
-                k=5,
+                k=10,
                 branch_name=BRANCH_NAME
             )
+            
+            print(f"[MEMORY HOOK] Retrieved: {recent_turns}", flush=True)
             
             if recent_turns and recent_turns.get("events"):
                 # Format conversation history for context
@@ -76,21 +78,24 @@ class ShortTermMemoryHook(HookProvider):
                         content = message.get('content', '')
                         if isinstance(content, dict):
                             content = content.get('text', str(content))
-                        context_messages.append(f"{role.title()}: {content}")
+                        if content:  # Only add non-empty messages
+                            context_messages.append(f"{role.title()}: {content}")
                 
                 if context_messages:
                     context = "\n".join(context_messages)
-                    logger.info(f"Context from memory: {context[:200]}...")
+                    print(f"[MEMORY HOOK] Context preview: {context[:300]}...", flush=True)
                     
                     # Add context to agent's system prompt
                     event.agent.system_prompt += f"\n\nRecent conversation history:\n{context}\n\nContinue the conversation naturally based on this context."
                     
-                    logger.info(f"✅ Loaded {len(context_messages)} recent messages")
+                    print(f"[MEMORY HOOK] ✅ Loaded {len(context_messages)} recent messages", flush=True)
             else:
-                logger.info("No previous conversation history found")
+                print("[MEMORY HOOK] No previous conversation history found", flush=True)
                 
         except Exception as e:
-            logger.error(f"Failed to load conversation history: {e}")
+            print(f"[MEMORY HOOK] ERROR loading history: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
     
     def on_message_added(self, event: MessageAddedEvent):
         """Store conversation turns in memory"""
@@ -100,8 +105,11 @@ class ShortTermMemoryHook(HookProvider):
             actor_id = event.agent.state.get("actor_id")
             session_id = event.agent.state.get("session_id")
             
+            print(f"[MEMORY HOOK] on_message_added called", flush=True)
+            print(f"[MEMORY HOOK] actor_id: {actor_id}, session_id: {session_id}", flush=True)
+            
             if not actor_id or not session_id:
-                logger.warning("Missing actor_id or session_id in agent state")
+                print("[MEMORY HOOK] WARNING: Missing actor_id or session_id", flush=True)
                 return
             
             # Store the last message
@@ -110,16 +118,20 @@ class ShortTermMemoryHook(HookProvider):
                 content = last_message.get("content", [{}])[0].get("text", "")
                 role = last_message.get("role", "")
                 
+                print(f"[MEMORY HOOK] Storing message: role={role}, content_length={len(content)}", flush=True)
+                
                 self.memory_client.create_event(
                     memory_id=self.memory_id,
                     actor_id=actor_id,
                     session_id=session_id,
                     messages=[(content, role)]
                 )
-                logger.info(f"✅ Stored message in memory: {role}")
+                print(f"[MEMORY HOOK] ✅ Stored message in memory: {role}", flush=True)
             
         except Exception as e:
-            logger.error(f"Failed to store message: {e}")
+            print(f"[MEMORY HOOK] ERROR storing message: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
     
     def register_hooks(self, registry: HookRegistry) -> None:
         # Register memory hooks
@@ -471,10 +483,10 @@ def travel_orchestrator_entrypoint(payload):
         orchestrator = get_or_create_orchestrator(session_id)
         
         # Invoke the orchestrator agent with session context
-        # AgentCore's built-in memory will handle retrieval and storage automatically
+        # Memory is handled by Strands hooks attached to agents
         print("[ENTRYPOINT] Invoking orchestrator agent...", flush=True)
         print(f"[MEMORY] Using actor_id: {actor_id}, session_id: {session_id}", flush=True)
-        print("[MEMORY] AgentCore built-in memory + Strands hooks active", flush=True)
+        print("[MEMORY] Memory managed via Strands hooks", flush=True)
         
         # Pass session context to agent
         response = orchestrator(user_input)
