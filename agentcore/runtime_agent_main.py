@@ -4,7 +4,6 @@ import sys
 import os
 from strands import Agent, tool
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from bedrock_agentcore.memory import MemoryClient
 from tavily import TavilyClient
 
 # Ensure prints are flushed immediately
@@ -13,16 +12,14 @@ print("[STARTUP] Initializing travel agent system...", flush=True)
 
 # Memory configuration
 MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
-BRANCH_NAME = "main"
 REGION = "eu-central-1"
 
-# Create the AgentCore app
-print("[MEMORY] Initializing AgentCore app...", flush=True)
-app = BedrockAgentCoreApp()
-
-# Initialize memory client
-print(f"[MEMORY] Initializing MemoryClient for region: {REGION}", flush=True)
-memory_client = MemoryClient(region_name=REGION)
+# Create the AgentCore app with memory enabled
+print("[MEMORY] Initializing AgentCore app with memory...", flush=True)
+app = BedrockAgentCoreApp(
+    memory_id=MEMORY_ID,
+    region_name=REGION
+)
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
 
 # Initialize Tavily client
@@ -36,91 +33,6 @@ else:
 
 # Session-based agents
 session_agents = {}
-
-
-# Memory tool
-@tool
-def memory_tool(action: str, content: str = None, query: str = None) -> str:
-    """
-    Manage conversation memory.
-    
-    Actions:
-    - "save": Store important information (requires content)
-    - "search": Search for relevant memories (requires query)
-    
-    Args:
-        action: Either "save" or "search"
-        content: Text to save (for save action)
-        query: Search query (for search action)
-    
-    Returns:
-        Result of the memory operation
-    """
-    try:
-        # Get session context from tool attribute
-        session_id = getattr(memory_tool, '_session_id', 'default_session')
-        actor_id = f"travel-user-{session_id}"
-        
-        print(f"[MEMORY TOOL] Action: {action}, session: {session_id}", flush=True)
-        
-        if action == "save":
-            if not content:
-                return "Error: content is required for save action"
-            
-            # Store in memory
-            memory_client.create_event(
-                memory_id=MEMORY_ID,
-                actor_id=actor_id,
-                session_id=session_id,
-                messages=[(content, "assistant")]
-            )
-            print(f"[MEMORY TOOL] Saved: {content[:100]}...", flush=True)
-            return f"Successfully saved to memory: {content}"
-        
-        elif action == "search":
-            if not query:
-                return "Error: query is required for search action"
-            
-            # Search memory
-            result = memory_client.get_last_k_turns(
-                memory_id=MEMORY_ID,
-                actor_id=actor_id,
-                session_id=session_id,
-                k=10,
-                branch_name=BRANCH_NAME
-            )
-            
-            events = result.get("events", [])
-            if not events:
-                return "No previous memories found"
-            
-            # Extract and format memories
-            memories = []
-            for event in events:
-                payload = event.get("payload", {})
-                messages = payload.get("messages", [])
-                for msg in messages:
-                    content = msg.get("content", "")
-                    if isinstance(content, dict):
-                        content = content.get("text", str(content))
-                    if content and query.lower() in content.lower():
-                        memories.append(content)
-            
-            if memories:
-                result_text = "\n".join(memories[:5])  # Return top 5 matches
-                print(f"[MEMORY TOOL] Found {len(memories)} memories", flush=True)
-                return f"Found memories:\n{result_text}"
-            else:
-                return f"No memories found matching: {query}"
-        
-        else:
-            return f"Error: Unknown action '{action}'. Use 'save' or 'search'"
-    
-    except Exception as e:
-        print(f"[MEMORY TOOL] ERROR: {e}", flush=True)
-        import traceback
-        traceback.print_exc()
-        return f"Memory error: {str(e)}"
 
 
 # Search tool
@@ -191,8 +103,8 @@ def get_or_create_agent(session_id: str):
     if session_id not in session_agents:
         print(f"[AGENT] Creating agent for session: {session_id}", flush=True)
         
-        # Create agent with tools
-        tools = [memory_tool, search_web] if tavily_client else [memory_tool]
+        # Create agent with search tool only
+        tools = [search_web] if tavily_client else []
         
         agent = Agent(
             name="TravelPlanningAgent",
@@ -200,36 +112,25 @@ def get_or_create_agent(session_id: str):
             tools=tools
         )
         
-        search_capability = "and real-time web search" if tavily_client else "(search disabled - no API key)"
+        search_info = "Use search_web to find real-time travel information." if tavily_client else "Search is currently unavailable."
         
-        agent.system_prompt = f"""I am an AI system built by Adam Laszlo to help you plan your travel.
+        agent.system_prompt = f"""I am a travel planning assistant built by Adam Laszlo.
 
-CRITICAL: ALWAYS start by checking memory with memory_tool(action="search", query="travel details") to see what you already know about this conversation.
-
-REQUIRED INFORMATION:
-To provide travel recommendations, I need:
+I help you plan trips by gathering three key pieces of information:
 1. Origin city (where you're traveling from)
-2. Destination city (where you're going)
+2. Destination city (where you're going)  
 3. Travel dates (specific dates)
 
-WORKFLOW:
-1. FIRST: memory_tool(action="search", query="travel details") - Check what you already know
-2. If you find origin/destination/dates in memory, use them immediately
-3. If missing information, ask for it
-4. ALWAYS: memory_tool(action="save", content="...") - Save each piece of information as you receive it
-5. Once you have all three, immediately search_web and provide recommendations
+IMPORTANT: I have access to our full conversation history automatically. I can see everything we've discussed.
 
-TOOLS:
-- memory_tool(action="search", query="...") - Search your memories FIRST
-- memory_tool(action="save", content="...") - Save important details ALWAYS
-- search_web(query="...") - Find real-time information
+When you provide travel details, I will:
+- Remember all information from our conversation
+- Use search_web to find current flights, hotels, and activities
+- Provide personalized recommendations
 
-SEARCH APPROACH:
-- Flights: search_web(query="flights from [origin] to [destination] [dates]")
-- Hotels: search_web(query="booking.com hotels [destination] [dates] best value")
-- Activities: search_web(query="things to do [destination] [dates]")
+{search_info}
 
-REMEMBER: Check memory FIRST, save information ALWAYS, search when you have all three pieces."""
+Let's plan your trip!"""
         
         session_agents[session_id] = agent
         print(f"[AGENT] Agent created with {len(tools)} tools", flush=True)
@@ -269,9 +170,6 @@ def travel_agent_entrypoint(payload):
         print(f"[ENTRYPOINT] User input: {user_input}", flush=True)
         print(f"[ENTRYPOINT] Session ID: {session_id}", flush=True)
         
-        # Set session context for tools
-        memory_tool._session_id = session_id
-        
         # Get or create agent
         agent = get_or_create_agent(session_id)
         
@@ -296,7 +194,8 @@ def travel_agent_entrypoint(payload):
 print("[RUNTIME] Entrypoint registered successfully!", flush=True)
 print(f"[RUNTIME] Memory ID: {MEMORY_ID}", flush=True)
 print(f"[RUNTIME] Region: {REGION}", flush=True)
-print(f"[RUNTIME] Tools: memory_tool + search_web", flush=True)
+print(f"[RUNTIME] Memory: Built-in AgentCore memory enabled", flush=True)
+print(f"[RUNTIME] Tools: search_web", flush=True)
 print("[RUNTIME] Ready to process requests!", flush=True)
 
 # Run the app
