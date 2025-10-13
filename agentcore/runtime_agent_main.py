@@ -4,6 +4,7 @@ import sys
 import os
 from strands import Agent, tool
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from bedrock_agentcore.memory import MemoryClient
 from tavily import TavilyClient
 
 # Ensure prints are flushed immediately
@@ -12,13 +13,18 @@ print("[STARTUP] Initializing travel agent system...", flush=True)
 
 # Memory configuration
 MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
+BRANCH_NAME = "main"
 REGION = "eu-central-1"
 
 # Create the AgentCore app
 print("[MEMORY] Initializing AgentCore app...", flush=True)
 app = BedrockAgentCoreApp()
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
-print("[MEMORY] Memory will be handled automatically by AgentCore", flush=True)
+
+# Initialize memory client
+print(f"[MEMORY] Initializing MemoryClient for region: {REGION}", flush=True)
+memory_client = MemoryClient(region_name=REGION)
+print("[MEMORY] MemoryClient initialized", flush=True)
 
 # Initialize Tavily client
 tavily_api_key = os.getenv("TAVILY_API_KEY")
@@ -29,9 +35,8 @@ else:
     tavily_client = None
     print("[SEARCH] WARNING: TAVILY_API_KEY not set, search will be disabled", flush=True)
 
-# Session-based agents and conversation history
+# Session-based agents
 session_agents = {}
-conversation_history = {}  # Store conversation history per session
 
 
 # Search tool
@@ -167,41 +172,74 @@ def travel_agent_entrypoint(payload):
         print(f"[ENTRYPOINT] User input: {user_input}", flush=True)
         print(f"[ENTRYPOINT] Session ID: {session_id}", flush=True)
         
-        # Initialize conversation history for this session if needed
-        if session_id not in conversation_history:
-            conversation_history[session_id] = []
-            print(f"[MEMORY] Created new conversation history for session: {session_id}", flush=True)
+        # Build actor_id from session
+        actor_id = f"travel-user-{session_id}"
+        
+        # Load conversation history from AgentCore memory
+        print("[MEMORY] Loading conversation history...", flush=True)
+        try:
+            recent_turns = memory_client.get_last_k_turns(
+                memory_id=MEMORY_ID,
+                actor_id=actor_id,
+                session_id=session_id,
+                k=5,
+                branch_name=BRANCH_NAME
+            )
+            
+            # Build context from history
+            context_parts = []
+            if recent_turns and len(recent_turns) > 0:
+                context_parts.append("Previous conversation:")
+                for turn in recent_turns:
+                    for message in turn:
+                        role = message.get("role", "").lower()
+                        content = message.get("content", {})
+                        if isinstance(content, dict):
+                            text = content.get("text", "")
+                        else:
+                            text = str(content)
+                        
+                        if role == "user":
+                            context_parts.append(f"User: {text}")
+                        elif role == "assistant":
+                            context_parts.append(f"Assistant: {text}")
+                
+                context_parts.append(f"\nCurrent request:\nUser: {user_input}")
+                full_input = "\n".join(context_parts)
+                print(f"[MEMORY] Loaded {len(recent_turns)} previous turns", flush=True)
+            else:
+                full_input = user_input
+                print("[MEMORY] No previous conversation history", flush=True)
+        
+        except Exception as e:
+            print(f"[MEMORY] Error loading history: {e}", flush=True)
+            full_input = user_input
         
         # Get or create agent
         agent = get_or_create_agent(session_id)
         
-        # Build context with conversation history
-        history = conversation_history[session_id]
-        if history:
-            context_parts = ["Previous conversation:"]
-            for turn in history[-5:]:  # Last 5 turns
-                context_parts.append(f"User: {turn['user']}")
-                context_parts.append(f"Assistant: {turn['assistant']}")
-            context_parts.append(f"\nCurrent request:\nUser: {user_input}")
-            full_input = "\n".join(context_parts)
-            print(f"[MEMORY] Using {len(history)} previous turns as context", flush=True)
-        else:
-            full_input = user_input
-            print("[MEMORY] No previous conversation history", flush=True)
-        
-        # Invoke agent
+        # Invoke agent with full context
         print("[ENTRYPOINT] Invoking agent...", flush=True)
         response = agent(full_input)
         
         # Extract text
         result = str(response)
         
-        # Store in conversation history
-        conversation_history[session_id].append({
-            "user": user_input,
-            "assistant": result
-        })
-        print(f"[MEMORY] Stored turn in conversation history (total: {len(conversation_history[session_id])})", flush=True)
+        # Store conversation turn in AgentCore memory
+        print("[MEMORY] Storing conversation turn...", flush=True)
+        try:
+            memory_client.create_event(
+                memory_id=MEMORY_ID,
+                actor_id=actor_id,
+                session_id=session_id,
+                messages=[
+                    (user_input, "user"),
+                    (result, "assistant")
+                ]
+            )
+            print("[MEMORY] Conversation turn stored successfully", flush=True)
+        except Exception as e:
+            print(f"[MEMORY] Error storing turn: {e}", flush=True)
         
         print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
         return result
