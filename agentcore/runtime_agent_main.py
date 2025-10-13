@@ -29,8 +29,9 @@ else:
     tavily_client = None
     print("[SEARCH] WARNING: TAVILY_API_KEY not set, search will be disabled", flush=True)
 
-# Session-based agents
+# Session-based agents and conversation history
 session_agents = {}
+conversation_history = {}  # Store conversation history per session
 
 
 # Search tool
@@ -114,21 +115,19 @@ def get_or_create_agent(session_id: str):
         
         agent.system_prompt = f"""I am a travel planning assistant built by Adam Laszlo.
 
-I help you plan trips by gathering three key pieces of information:
+I help you plan trips. When planning, I need:
 1. Origin city (where you're traveling from)
 2. Destination city (where you're going)  
 3. Travel dates (specific dates)
 
-IMPORTANT: I have access to our full conversation history automatically. I can see everything we've discussed.
-
-When you provide travel details, I will:
-- Remember all information from our conversation
-- Use search_web to find current flights, hotels, and activities
-- Provide personalized recommendations
+Once I have these details, I use search_web to find:
+- Current flight options and prices
+- Hotel recommendations
+- Activities and attractions
 
 {search_info}
 
-Let's plan your trip!"""
+I remember our conversation, so you don't need to repeat information you've already told me."""
         
         session_agents[session_id] = agent
         print(f"[AGENT] Agent created with {len(tools)} tools", flush=True)
@@ -168,15 +167,41 @@ def travel_agent_entrypoint(payload):
         print(f"[ENTRYPOINT] User input: {user_input}", flush=True)
         print(f"[ENTRYPOINT] Session ID: {session_id}", flush=True)
         
+        # Initialize conversation history for this session if needed
+        if session_id not in conversation_history:
+            conversation_history[session_id] = []
+            print(f"[MEMORY] Created new conversation history for session: {session_id}", flush=True)
+        
         # Get or create agent
         agent = get_or_create_agent(session_id)
         
+        # Build context with conversation history
+        history = conversation_history[session_id]
+        if history:
+            context_parts = ["Previous conversation:"]
+            for turn in history[-5:]:  # Last 5 turns
+                context_parts.append(f"User: {turn['user']}")
+                context_parts.append(f"Assistant: {turn['assistant']}")
+            context_parts.append(f"\nCurrent request:\nUser: {user_input}")
+            full_input = "\n".join(context_parts)
+            print(f"[MEMORY] Using {len(history)} previous turns as context", flush=True)
+        else:
+            full_input = user_input
+            print("[MEMORY] No previous conversation history", flush=True)
+        
         # Invoke agent
         print("[ENTRYPOINT] Invoking agent...", flush=True)
-        response = agent(user_input)
+        response = agent(full_input)
         
         # Extract text
         result = str(response)
+        
+        # Store in conversation history
+        conversation_history[session_id].append({
+            "user": user_input,
+            "assistant": result
+        })
+        print(f"[MEMORY] Stored turn in conversation history (total: {len(conversation_history[session_id])})", flush=True)
         
         print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
         return result
