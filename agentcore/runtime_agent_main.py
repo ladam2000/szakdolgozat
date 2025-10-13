@@ -1,11 +1,11 @@
-"""AgentCore runtime with official Strands memory tool and Tavily search."""
+"""AgentCore runtime with memory and Tavily search."""
 
 import sys
 import os
-from strands import Agent
+from strands import Agent, tool
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
-from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
-from strands_tools import tavily
+from bedrock_agentcore.memory import MemoryClient
+from tavily import TavilyClient
 
 # Ensure prints are flushed immediately
 sys.stdout.flush()
@@ -15,88 +15,250 @@ print("[STARTUP] Initializing travel agent system...", flush=True)
 MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
 BRANCH_NAME = "main"
 REGION = "eu-central-1"
-NAMESPACE = "travel"  # Namespace for memory records
 
 # Create the AgentCore app
 print("[MEMORY] Initializing AgentCore app...", flush=True)
 app = BedrockAgentCoreApp()
 
+# Initialize memory client
+print(f"[MEMORY] Initializing MemoryClient for region: {REGION}", flush=True)
+memory_client = MemoryClient(region_name=REGION)
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
-print(f"[MEMORY] Region: {REGION}", flush=True)
-print(f"[MEMORY] Using official Strands AgentCore memory tool", flush=True)
+
+# Initialize Tavily client
+tavily_api_key = os.getenv("TAVILY_API_KEY")
+if tavily_api_key:
+    tavily_client = TavilyClient(api_key=tavily_api_key)
+    print("[SEARCH] Tavily client initialized", flush=True)
+else:
+    tavily_client = None
+    print("[SEARCH] WARNING: TAVILY_API_KEY not set, search will be disabled", flush=True)
 
 # Session-based agents
 session_agents = {}
 
 
-def get_or_create_agent(session_id: str):
-    """Get or create travel agent for a specific session with memory."""
-    if session_id not in session_agents:
-        # Create shared actor_id for this session
+# Memory tool
+@tool
+def memory_tool(action: str, content: str = None, query: str = None) -> str:
+    """
+    Manage conversation memory.
+    
+    Actions:
+    - "save": Store important information (requires content)
+    - "search": Search for relevant memories (requires query)
+    
+    Args:
+        action: Either "save" or "search"
+        content: Text to save (for save action)
+        query: Search query (for search action)
+    
+    Returns:
+        Result of the memory operation
+    """
+    try:
+        # Get session context from tool attribute
+        session_id = getattr(memory_tool, '_session_id', 'default_session')
         actor_id = f"travel-user-{session_id}"
         
-        print(f"[AGENT] Creating agent for session: {session_id}", flush=True)
-        print(f"[AGENT] Actor ID: {actor_id}", flush=True)
+        print(f"[MEMORY TOOL] Action: {action}, session: {session_id}", flush=True)
         
-        # Initialize memory tool provider
-        memory_provider = AgentCoreMemoryToolProvider(
-            memory_id=MEMORY_ID,
-            actor_id=actor_id,
-            session_id=session_id,
-            namespace=NAMESPACE,
-            region=REGION
+        if action == "save":
+            if not content:
+                return "Error: content is required for save action"
+            
+            # Store in memory
+            memory_client.create_event(
+                memory_id=MEMORY_ID,
+                actor_id=actor_id,
+                session_id=session_id,
+                messages=[(content, "assistant")]
+            )
+            print(f"[MEMORY TOOL] Saved: {content[:100]}...", flush=True)
+            return f"Successfully saved to memory: {content}"
+        
+        elif action == "search":
+            if not query:
+                return "Error: query is required for search action"
+            
+            # Search memory
+            result = memory_client.get_last_k_turns(
+                memory_id=MEMORY_ID,
+                actor_id=actor_id,
+                session_id=session_id,
+                k=10,
+                branch_name=BRANCH_NAME
+            )
+            
+            events = result.get("events", [])
+            if not events:
+                return "No previous memories found"
+            
+            # Extract and format memories
+            memories = []
+            for event in events:
+                payload = event.get("payload", {})
+                messages = payload.get("messages", [])
+                for msg in messages:
+                    content = msg.get("content", "")
+                    if isinstance(content, dict):
+                        content = content.get("text", str(content))
+                    if content and query.lower() in content.lower():
+                        memories.append(content)
+            
+            if memories:
+                result_text = "\n".join(memories[:5])  # Return top 5 matches
+                print(f"[MEMORY TOOL] Found {len(memories)} memories", flush=True)
+                return f"Found memories:\n{result_text}"
+            else:
+                return f"No memories found matching: {query}"
+        
+        else:
+            return f"Error: Unknown action '{action}'. Use 'save' or 'search'"
+    
+    except Exception as e:
+        print(f"[MEMORY TOOL] ERROR: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return f"Memory error: {str(e)}"
+
+
+# Search tool
+@tool
+def search_web(query: str) -> str:
+    """
+    Search the web for current information.
+    
+    Use this to find:
+    - Flight prices and availability
+    - Hotel options and reviews
+    - Activities and attractions
+    - Weather and events
+    - Any real-time travel information
+    
+    Args:
+        query: Search query (e.g., "flights from Budapest to Paris October 2025")
+    
+    Returns:
+        Search results with relevant information
+    """
+    try:
+        if not tavily_client:
+            return "Search is not available (TAVILY_API_KEY not configured)"
+        
+        print(f"[SEARCH] Query: {query}", flush=True)
+        
+        # Perform search
+        response = tavily_client.search(
+            query=query,
+            max_results=5,
+            include_answer=True
         )
         
-        # Create agent with memory and Tavily tools
+        # Format results
+        results = []
+        
+        # Add AI-generated answer if available
+        if response.get("answer"):
+            results.append(f"Summary: {response['answer']}\n")
+        
+        # Add search results
+        for i, result in enumerate(response.get("results", []), 1):
+            title = result.get("title", "No title")
+            url = result.get("url", "")
+            content = result.get("content", "")
+            
+            results.append(f"{i}. {title}")
+            if content:
+                results.append(f"   {content[:200]}...")
+            if url:
+                results.append(f"   Source: {url}")
+            results.append("")
+        
+        result_text = "\n".join(results)
+        print(f"[SEARCH] Found {len(response.get('results', []))} results", flush=True)
+        return result_text if result_text else "No results found"
+    
+    except Exception as e:
+        print(f"[SEARCH] ERROR: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return f"Search error: {str(e)}"
+
+
+def get_or_create_agent(session_id: str):
+    """Get or create travel agent for a specific session."""
+    if session_id not in session_agents:
+        print(f"[AGENT] Creating agent for session: {session_id}", flush=True)
+        
+        # Create agent with tools
+        tools = [memory_tool, search_web] if tavily_client else [memory_tool]
+        
         agent = Agent(
             name="TravelPlanningAgent",
             model="eu.amazon.nova-micro-v1:0",
-            tools=[*memory_provider.tools, tavily]
+            tools=tools
         )
         
-        agent.system_prompt = """You are a comprehensive travel planning assistant with access to real-time web search and memory.
+        search_capability = "and real-time web search" if tavily_client else "(search disabled - no API key)"
+        
+        agent.system_prompt = f"""You are a comprehensive travel planning assistant with memory {search_capability}.
+
+CRITICAL REQUIREMENTS:
+Before providing ANY travel recommendations, you MUST have these THREE pieces of information:
+1. **Origin City** - Where the user is traveling FROM
+2. **Destination City** - Where the user is traveling TO
+3. **Travel Dates** - When they are traveling
+
+If you don't have all three, you MUST ask for the missing information. Do NOT search for flights, hotels, or activities until you have all three.
 
 IMPORTANT CAPABILITIES:
-1. **Memory Management**: You can store and retrieve information using agent_core_memory tool
-   - Use action="record" to save important information (user preferences, trip details, etc.)
-   - Use action="retrieve" with query to search your memories
-   - Always check your memories before asking questions you might have already answered
 
-2. **Real-Time Search**: You can search the web using tavily_search for:
-   - Current flight prices and availability
-   - Hotel options and reviews
-   - Activities and attractions
-   - Travel tips and recommendations
-   - Weather, events, and local information
+1. **Memory Management**: Use the memory_tool to remember information
+   - memory_tool(action="save", content="...") - Save important details
+   - memory_tool(action="search", query="...") - Search your memories
+   - ALWAYS check your memories before asking questions you might have already answered
+
+2. **Web Search**: Use search_web to find current information
+   - search_web(query="flights from X to Y") - Find flight options
+   - search_web(query="hotels in X") - Find hotel options
+   - search_web(query="things to do in X") - Find activities
+   - Use this for ANY real-time information needs
 
 WORKFLOW:
-1. **First, check your memory**: Use agent_core_memory with action="retrieve" to see if you already know about this user's trip
-2. **Gather information**: Ask clarifying questions if needed (origin, destination, dates, budget, preferences)
-3. **Search for real information**: Use tavily_search to find current flights, hotels, activities
-4. **Save important details**: Use agent_core_memory with action="record" to save trip details and preferences
-5. **Provide comprehensive guidance**: Synthesize search results into helpful recommendations
 
-MEMORY USAGE EXAMPLES:
-- When user says "I want to go to Paris": 
-  → agent_core_memory(action="record", content="User wants to travel to Paris")
-  
-- When user asks "What about hotels?":
-  → agent_core_memory(action="retrieve", query="destination city travel plans")
-  → See that they want to go to Paris
-  → tavily_search(query="best hotels in Paris 2025")
+1. **Check memory first**: Use memory_tool(action="search", query="travel details") to see what you already know
+2. **Verify required information**: Check if you have origin, destination, and dates
+3. **Ask for missing information**: If any of the three required pieces are missing, ask for them
+4. **Save information as you receive it**: Use memory_tool(action="save", ...) for each piece
+5. **Only when you have all three**: Search for flights, hotels, and activities
+6. **Provide comprehensive plan**: Synthesize search results into helpful recommendations
 
-- When user provides dates "October 23-25":
-  → agent_core_memory(action="record", content="Travel dates: October 23-25, 2025")
+EXAMPLES:
 
-SEARCH USAGE EXAMPLES:
-- For flights: tavily_search(query="flights from Budapest to Paris October 2025 prices")
-- For hotels: tavily_search(query="hotels near Eiffel Tower Paris reviews prices")
-- For activities: tavily_search(query="top things to do in Paris October 2025")
+User: "I want to go to Paris"
+→ memory_tool(action="search", query="travel details")
+→ memory_tool(action="save", content="Destination: Paris")
+→ Response: "Great! I'd love to help you plan your Paris trip. To find the best options, I need:
+   1. Where are you traveling from?
+   2. What are your travel dates?"
 
-Always be helpful, use real data from searches, and maintain context through memory!"""
+User: "From Budapest"
+→ memory_tool(action="save", content="Origin: Budapest")
+→ Response: "Perfect! Budapest to Paris. What are your travel dates?"
+
+User: "October 23-25"
+→ memory_tool(action="save", content="Dates: October 23-25, 2025")
+→ NOW you have all three! Search for real information:
+→ search_web(query="flights from Budapest to Paris October 23-25 2025")
+→ search_web(query="hotels in Paris October 2025")
+→ search_web(query="things to do in Paris October")
+→ Provide comprehensive travel plan with real data
+
+REMEMBER: Do NOT provide travel recommendations without origin, destination, AND dates!"""
         
         session_agents[session_id] = agent
-        print(f"[AGENT] Agent created with memory and Tavily search", flush=True)
+        print(f"[AGENT] Agent created with {len(tools)} tools", flush=True)
     
     return session_agents[session_id]
 
@@ -105,7 +267,7 @@ Always be helpful, use real data from searches, and maintain context through mem
 @app.entrypoint
 def travel_agent_entrypoint(payload):
     """
-    AgentCore entrypoint for travel planning agent with memory and search.
+    AgentCore entrypoint for travel planning agent.
     
     Args:
         payload: Dictionary with user input and session_id
@@ -113,7 +275,6 @@ def travel_agent_entrypoint(payload):
     Returns:
         String response from the agent
     """
-    # Force immediate output
     os.environ['PYTHONUNBUFFERED'] = '1'
     
     print("\n" + "=" * 80, flush=True)
@@ -124,25 +285,27 @@ def travel_agent_entrypoint(payload):
     try:
         print(f"[ENTRYPOINT] Received payload: {payload}", flush=True)
         
-        # Extract user input and session_id from payload
+        # Extract user input and session_id
         user_input = payload.get("input") or payload.get("prompt", "")
         session_id = payload.get("session_id") or payload.get("sessionId", "default_session")
         
         if not user_input:
-            print("[ENTRYPOINT] WARNING: No input found in payload", flush=True)
             return "Please provide a travel request in the 'input' or 'prompt' field."
         
         print(f"[ENTRYPOINT] User input: {user_input}", flush=True)
         print(f"[ENTRYPOINT] Session ID: {session_id}", flush=True)
         
-        # Get or create agent for this session
+        # Set session context for tools
+        memory_tool._session_id = session_id
+        
+        # Get or create agent
         agent = get_or_create_agent(session_id)
         
-        # Invoke the agent
+        # Invoke agent
         print("[ENTRYPOINT] Invoking agent...", flush=True)
         response = agent(user_input)
         
-        # Extract text from response
+        # Extract text
         result = str(response)
         
         print(f"[ENTRYPOINT] Returning response: {len(result)} characters", flush=True)
@@ -155,14 +318,14 @@ def travel_agent_entrypoint(payload):
         return f"I apologize, but I encountered an error: {str(e)}"
 
 
-# Verify entrypoint is registered
+# Verify entrypoint
 print("[RUNTIME] Entrypoint registered successfully!", flush=True)
 print(f"[RUNTIME] Memory ID: {MEMORY_ID}", flush=True)
 print(f"[RUNTIME] Region: {REGION}", flush=True)
-print("[RUNTIME] Tools: AgentCore Memory + Tavily Search", flush=True)
+print(f"[RUNTIME] Tools: memory_tool + search_web", flush=True)
 print("[RUNTIME] Ready to process requests!", flush=True)
 
-# Run the AgentCore app
+# Run the app
 if __name__ == "__main__":
     print("[RUNTIME] Starting AgentCore app...", flush=True)
     app.run()

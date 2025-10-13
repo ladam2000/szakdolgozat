@@ -1,5 +1,6 @@
 strands-agents
-strands-tools
 bedrock-agentcore
 opentelemetry-distro
 opentelemetry-exporter-otlp
+tavily-python
+aiohttp
