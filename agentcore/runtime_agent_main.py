@@ -14,13 +14,11 @@ print("[STARTUP] Initializing travel agent system...", flush=True)
 MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
 REGION = "eu-central-1"
 
-# Create the AgentCore app with memory enabled
-print("[MEMORY] Initializing AgentCore app with memory...", flush=True)
-app = BedrockAgentCoreApp(
-    memory_id=MEMORY_ID,
-    region_name=REGION
-)
+# Create the AgentCore app
+print("[MEMORY] Initializing AgentCore app...", flush=True)
+app = BedrockAgentCoreApp()
 print(f"[MEMORY] Memory ID: {MEMORY_ID}", flush=True)
+print("[MEMORY] Memory will be handled automatically by AgentCore", flush=True)
 
 # Initialize Tavily client
 tavily_api_key = os.getenv("TAVILY_API_KEY")
