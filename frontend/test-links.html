@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Link Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        a { color: #0066cc; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Link Conversion Test</h1>
+    
+    <div class="test">
+        <h3>Test 1: Simple Link</h3>
+        <div id="test1-input"></div>
+        <div id="test1-output"></div>
+    </div>
+    
+    <div class="test">
+        <h3>Test 2: Link in List</h3>
+        <div id="test2-input"></div>
+        <div id="test2-output"></div>
+    </div>
+    
+    <div class="test">
+        <h3>Test 3: Multiple Links</h3>
+        <div id="test3-input"></div>
+        <div id="test3-output"></div>
+    </div>
+    
+    <script>
+        function convertMarkdown(text) {
+            let html = text;
+            
+            // Convert markdown links FIRST
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            
+            // Convert lists
+            html = html.replace(/^- (.*?)$/gm, '<li>$1</li>');
+            
+            // Convert newlines to br
+            html = html.replace(/\n/g, '<br>');
+            
+            // Wrap list items in ul
+            html = html.replace(/(<li>.*?<\/li><br>)+/g, match => {
+                const cleaned = match.replace(/<br>/g, '');
+                return `<ul>${cleaned}</ul>`;
+            });
+            
+            return html;
+        }
+        
+        // Test 1
+        const test1 = 'Visit [Booking.com](https://www.booking.com/accommodation/city/gr/korinos.html) for more info.';
+        document.getElementById('test1-input').textContent = 'Input: ' + test1;
+        document.getElementById('test1-output').innerHTML = 'Output: ' + convertMarkdown(test1);
+        
+        // Test 2
+        const test2 = '- Source: [Booking.com](https://www.booking.com/accommodation/city/gr/korinos.html)';
+        document.getElementById('test2-input').textContent = 'Input: ' + test2;
+        document.getElementById('test2-output').innerHTML = 'Output: ' + convertMarkdown(test2);
+        
+        // Test 3
+        const test3 = 'Visit [Hellotickets](https://www.hellotickets.com/greece/athens/athens-in-december/sc-142-3636) and [In Love With Greece](https://inlovewithgreece.com/10-cool-things-to-do-in-athens-in-winter/).';
+        document.getElementById('test3-input').textContent = 'Input: ' + test3;
+        document.getElementById('test3-output').innerHTML = 'Output: ' + convertMarkdown(test3);
+    </script>
+</body>
+</html>

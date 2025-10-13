@@ -16,7 +16,7 @@ export const userManager = new UserManager({
 // Sign out function
 export async function signOutRedirect() {
     const clientId = "6kmkgdkls92qfthrbglelcsdjm";
-    const logoutUri = window.location.origin + "/";
+    const logoutUri = "https://dbziso5b0wjgl.cloudfront.net/";
     const cognitoDomain = "https://travel-assistant.auth.eu-central-1.amazoncognito.com";
     
     // Clear local session

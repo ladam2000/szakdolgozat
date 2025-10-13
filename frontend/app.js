@@ -1,17 +1,14 @@
 import { userManager, signOutRedirect, getUser, isAuthenticated } from './auth.js';
 
-// Configuration - Replace with your API Gateway URL after deployment
 const API_URL = 'https://fbiwuqkkwu6yqutfmr25anrnuy0hwfnl.lambda-url.eu-central-1.on.aws/';
 
-// Global state
 let currentUser = null;
 let sessionId = localStorage.getItem('sessionId');
 if (!sessionId) {
     sessionId = generateSessionId();
-    localStorage.getItem('sessionId', sessionId);
+    localStorage.setItem('sessionId', sessionId);
 }
 
-// DOM elements
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
 const signInButton = document.getElementById('signInButton');
@@ -20,11 +17,8 @@ const userEmail = document.getElementById('userEmail');
 const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
-const resetButton = document.getElementById('resetButton');
 
-// Initialize app
 async function initializeApp() {
-    // Check if returning from Cognito redirect
     if (window.location.search.includes('code=')) {
         try {
             currentUser = await userManager.signinCallback();
@@ -38,7 +32,6 @@ async function initializeApp() {
         }
     }
     
-    // Check authentication status
     const authenticated = await isAuthenticated();
     
     if (authenticated) {
@@ -49,13 +42,11 @@ async function initializeApp() {
     }
 }
 
-// Show login screen
 function showLogin() {
     loginScreen.style.display = 'flex';
     appScreen.style.display = 'none';
 }
 
-// Show main app
 async function showApp() {
     loginScreen.style.display = 'none';
     appScreen.style.display = 'block';
@@ -64,11 +55,9 @@ async function showApp() {
         userEmail.textContent = currentUser.profile?.email || 'User';
     }
     
-    // Load conversation history if exists
-    await loadConversationHistory();
+    addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
 }
 
-// Event listeners
 signInButton.addEventListener('click', async () => {
     await userManager.signinRedirect();
 });
@@ -78,76 +67,32 @@ signOutButton.addEventListener('click', async () => {
 });
 
 sendButton.addEventListener('click', sendMessage);
-resetButton.addEventListener('click', resetSession);
 messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         sendMessage();
     }
 });
 
-// Initialize on load
 initializeApp();
-
-async function loadConversationHistory() {
-    try {
-        // Try to load history for current session
-        const response = await fetch(`${API_URL}?session_id=${sessionId}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentUser.access_token}`,
-            },
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.messages && data.messages.length > 0) {
-            // Load existing conversation
-            console.log(`Loading ${data.messages.length} previous messages`);
-            data.messages.forEach(msg => {
-                addMessage(msg.text, msg.type);
-            });
-            addSystemMessage('Conversation resumed. How can I help you further?');
-        } else {
-            // New conversation
-            addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
-        }
-        
-    } catch (error) {
-        console.error('Error loading history:', error);
-        // If history loading fails, just show welcome message
-        addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
-    }
-}
 
 async function sendMessage() {
     const message = messageInput.value.trim();
     if (!message) return;
     
-    // Check authentication
     if (!currentUser) {
         addSystemMessage('Please sign in to continue');
         return;
     }
     
-    // Disable input
     messageInput.disabled = true;
     sendButton.disabled = true;
     
-    // Add user message
     addMessage(message, 'user');
     messageInput.value = '';
     
     try {
-        // Show loading indicator
         const loadingId = addLoadingMessage();
         
-        // Send to API with auth token
-        // Lambda Function URL doesn't support paths, send directly
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
@@ -160,7 +105,6 @@ async function sendMessage() {
             }),
         });
         
-        // Remove loading indicator
         removeMessage(loadingId);
         
         if (!response.ok) {
@@ -168,52 +112,15 @@ async function sendMessage() {
         }
         
         const data = await response.json();
-        
-        // Add assistant response
         addMessage(data.response, 'assistant');
         
     } catch (error) {
         console.error('Error:', error);
         addSystemMessage('Sorry, there was an error processing your request. Please try again.');
     } finally {
-        // Re-enable input
         messageInput.disabled = false;
         sendButton.disabled = false;
         messageInput.focus();
-    }
-}
-
-async function resetSession() {
-    if (!confirm('Are you sure you want to reset the conversation?')) {
-        return;
-    }
-    
-    try {
-        // For reset, just generate new session ID locally
-        // Lambda Function URL doesn't support routing
-        // await fetch(API_URL, {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //     },
-        //     body: JSON.stringify({
-        //         session_id: sessionId,
-        //         reset: true,
-        //     }),
-        // });
-        
-        // Clear messages
-        messagesContainer.innerHTML = '';
-        
-        // Generate new session ID
-        sessionId = generateSessionId();
-        localStorage.setItem('sessionId', sessionId);
-        
-        addSystemMessage('Conversation reset. How can I help you plan your trip?');
-        
-    } catch (error) {
-        console.error('Error:', error);
-        addSystemMessage('Error resetting conversation. Please refresh the page.');
     }
 }
 
@@ -221,32 +128,40 @@ function addMessage(text, type) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     
-    // Convert markdown to HTML
-    let formattedText = text
-        // Headings (must be done before newlines)
-        .replace(/^### (.*?)$/gm, '<h3>$1</h3>')
-        .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
-        .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
-        // Links [text](url) - must be done before lists
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-        // Lists (must be done before newlines)
-        .replace(/^- (.*?)$/gm, '<li>$1</li>')
-        // Bold and italic
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        // Code
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        // Convert remaining newlines to <br>
-        .replace(/\n/g, '<br>');
+    let html = text;
     
-    // Wrap consecutive <li> elements in <ul>
-    formattedText = formattedText.replace(/(<li>.*?<\/li>)(<br>)?(?=<li>|$)/g, '$1');
-    formattedText = formattedText.replace(/(<li>.*?<\/li>)+/g, '<ul>$&</ul>');
+    // Convert markdown links FIRST - this is critical
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
     
-    messageDiv.innerHTML = formattedText;
+    // Convert headings
+    html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
+    
+    // Convert lists
+    html = html.replace(/^- (.*?)$/gm, '<li>$1</li>');
+    
+    // Convert bold and italic
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    
+    // Convert code
+    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+    
+    // Convert newlines to br
+    html = html.replace(/\n/g, '<br>');
+    
+    // Wrap list items in ul
+    html = html.replace(/(<li>.*?<\/li><br>)+/g, match => {
+        const cleaned = match.replace(/<br>/g, '');
+        return `<ul>${cleaned}</ul>`;
+    });
+    
+    messageDiv.innerHTML = html;
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
-    return messageDiv.id = generateId();
+    messageDiv.id = generateId();
+    return messageDiv.id;
 }
 
 function addSystemMessage(text) {
@@ -276,9 +191,9 @@ function scrollToBottom() {
 }
 
 function generateSessionId() {
-    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
 }
 
 function generateId() {
-    return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    return 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
 }

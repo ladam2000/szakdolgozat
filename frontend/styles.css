@@ -284,3 +284,19 @@ button.secondary:hover {
     font-family: 'Courier New', monospace;
     font-size: 0.9em;
 }
+
+.message a {
+    color: #0066cc;
+    text-decoration: underline;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.message a:hover {
+    color: #0052a3;
+    text-decoration: underline;
+}
+
+.message a:visited {
+    color: #551a8b;
+}
