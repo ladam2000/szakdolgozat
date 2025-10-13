@@ -227,6 +227,8 @@ function addMessage(text, type) {
         .replace(/^### (.*?)$/gm, '<h3>$1</h3>')
         .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
         .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
+        // Links [text](url) - must be done before lists
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
         // Lists (must be done before newlines)
         .replace(/^- (.*?)$/gm, '<li>$1</li>')
         // Bold and italic
