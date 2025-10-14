@@ -3,6 +3,7 @@
 import sys
 import os
 from strands import Agent, tool
+from strands.models import BedrockModel
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from bedrock_agentcore.memory import MemoryClient
 from tavily import TavilyClient
@@ -11,10 +12,13 @@ from tavily import TavilyClient
 sys.stdout.flush()
 print("[STARTUP] Initializing travel agent system...", flush=True)
 
-# Memory configuration
-MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
-BRANCH_NAME = "main"
-REGION = "eu-central-1"
+# Configuration from environment variables
+MEMORY_ID = os.getenv("MEMORY_ID", "memory_rllrl-lfg7zBH6MH")
+BRANCH_NAME = os.getenv("BRANCH_NAME", "main")
+REGION = os.getenv("REGION", "eu-central-1")
+MODEL_ID = os.getenv("MODEL_ID", "eu.amazon.nova-micro-v1:0")
+GUARDRAIL_ID = os.getenv("GUARDRAIL_ID")
+GUARDRAIL_VERSION = os.getenv("GUARDRAIL_VERSION", "DRAFT")
 
 # Create the AgentCore app
 print("[MEMORY] Initializing AgentCore app...", flush=True)
@@ -27,9 +31,9 @@ memory_client = MemoryClient(region_name=REGION)
 print("[MEMORY] MemoryClient initialized", flush=True)
 
 # Initialize Tavily client
-tavily_api_key = os.getenv("TAVILY_API_KEY")
-if tavily_api_key:
-    tavily_client = TavilyClient(api_key=tavily_api_key)
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+if TAVILY_API_KEY:
+    tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
     print("[SEARCH] Tavily client initialized", flush=True)
 else:
     tavily_client = None
@@ -110,9 +114,22 @@ def get_or_create_agent(session_id: str):
         # Create agent with search tool only
         tools = [search_web] if tavily_client else []
         
+        # Configure model with optional guardrails
+        if GUARDRAIL_ID:
+            print(f"[GUARDRAILS] Enabling guardrails: {GUARDRAIL_ID} (version: {GUARDRAIL_VERSION})", flush=True)
+            model = BedrockModel(
+                model_id=MODEL_ID,
+                guardrail_id=GUARDRAIL_ID,
+                guardrail_version=GUARDRAIL_VERSION,
+                guardrail_trace="enabled"
+            )
+        else:
+            print("[GUARDRAILS] No guardrail configured", flush=True)
+            model = MODEL_ID
+        
         agent = Agent(
             name="TravelPlanningAgent",
-            model="eu.amazon.nova-micro-v1:0",
+            model=model,
             tools=tools
         )
         

@@ -15,16 +15,21 @@ export const userManager = new UserManager({
 
 // Sign out function
 export async function signOutRedirect() {
-    const clientId = "6kmkgdkls92qfthrbglelcsdjm";
-    const logoutUri = "https://dbziso5b0wjgl.cloudfront.net/";
-    const cognitoDomain = "https://travel-assistant.auth.eu-central-1.amazoncognito.com";
-    
-    // Clear local session
-    await userManager.removeUser();
-    localStorage.clear();
-    
-    // Redirect to Cognito logout
-    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
+    try {
+        // Clear the user session
+        await userManager.removeUser();
+        
+        // Clear any additional session storage
+        sessionStorage.clear();
+        localStorage.removeItem('oidc.user:' + cognitoAuthConfig.authority + ':' + cognitoAuthConfig.client_id);
+        
+        // Redirect to home page
+        window.location.href = cognitoAuthConfig.redirect_uri;
+    } catch (error) {
+        console.error('Error during signout:', error);
+        // Force redirect anyway
+        window.location.href = cognitoAuthConfig.redirect_uri;
+    }
 }
 
 // Get current user
