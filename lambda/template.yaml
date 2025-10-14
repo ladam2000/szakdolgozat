@@ -38,7 +38,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: travel-assistant-proxy
-      Runtime: python3.11
+      Runtime: python3.13
       Handler: handler.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300

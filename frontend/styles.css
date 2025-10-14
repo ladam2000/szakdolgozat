@@ -93,6 +93,90 @@ header p {
     opacity: 0.9;
 }
 
+/* Language Switcher */
+.language-switcher {
+    display: flex;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 4px;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+.lang-btn {
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lang-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.lang-btn.active {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.lang-btn .flag {
+    font-size: 1.5rem;
+    line-height: 1;
+    display: block;
+}
+
+/* Language Switcher for Login Screen */
+.language-switcher-login {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 8px;
+    background: #f8f9fa;
+    padding: 4px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.lang-btn-login {
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lang-btn-login:hover {
+    background: #e9ecef;
+    transform: scale(1.05);
+}
+
+.lang-btn-login.active {
+    background: white;
+    border-color: #667eea;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+.lang-btn-login .flag {
+    font-size: 1.5rem;
+    line-height: 1;
+    display: block;
+}
+
+.login-container {
+    position: relative;
+}
+
 .chat-container {
     background: white;
     border-radius: 12px;

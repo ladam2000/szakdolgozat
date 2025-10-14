@@ -9,6 +9,39 @@ if (!sessionId) {
     localStorage.setItem('sessionId', sessionId);
 }
 
+// Language translations
+const translations = {
+    en: {
+        title: 'Virtual Travel Assistant',
+        subtitle: 'Plan your perfect trip with AI-powered assistance',
+        loginSubtitle: 'Sign in to start planning your trip',
+        signIn: 'Sign In with Cognito',
+        signOut: 'Sign Out',
+        send: 'Send',
+        inputPlaceholder: 'Ask about flights, hotels, or activities...',
+        welcomeMessage: 'Welcome! I can help you plan flights, hotels, and activities. What would you like to do?',
+        errorMessage: 'Sorry, there was an error processing your request. Please try again.',
+        signInRequired: 'Please sign in to continue'
+    },
+    hu: {
+        title: 'Virtuális Utazási Asszisztens',
+        subtitle: 'Tervezd meg a tökéletes utazásod AI-alapú segítséggel',
+        loginSubtitle: 'Jelentkezz be az utazástervezés megkezdéséhez',
+        signIn: 'Bejelentkezés Cognito-val',
+        signOut: 'Kijelentkezés',
+        send: 'Küldés',
+        inputPlaceholder: 'Kérdezz repülőjáratokról, szállásokról vagy programokról...',
+        welcomeMessage: 'Üdvözöllek! Segíthetek repülőjáratok, szállások és programok tervezésében. Miben segíthetek?',
+        errorMessage: 'Sajnálom, hiba történt a kérés feldolgozása során. Kérlek, próbáld újra.',
+        signInRequired: 'Kérlek, jelentkezz be a folytatáshoz'
+    }
+};
+
+let currentLanguage = localStorage.getItem('language') || 'en';
+
+// Initialize language on page load
+console.log('Initial language:', currentLanguage);
+
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
 const signInButton = document.getElementById('signInButton');
@@ -17,6 +50,44 @@ const userEmail = document.getElementById('userEmail');
 const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
+
+// Initialize language
+function updateLanguage(lang) {
+    currentLanguage = lang;
+    localStorage.setItem('language', lang);
+    
+    // Update all elements with data-i18n attribute
+    document.querySelectorAll('[data-i18n]').forEach(element => {
+        const key = element.getAttribute('data-i18n');
+        if (translations[lang][key]) {
+            element.textContent = translations[lang][key];
+        }
+    });
+    
+    // Update placeholder
+    const placeholderKey = messageInput.getAttribute('data-i18n-placeholder');
+    if (placeholderKey && translations[lang][placeholderKey]) {
+        messageInput.placeholder = translations[lang][placeholderKey];
+    }
+    
+    // Update active state for language buttons
+    document.querySelectorAll('.lang-btn, .lang-btn-login').forEach(btn => {
+        if (btn.getAttribute('data-lang') === lang) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+}
+
+// Language button event listeners
+document.addEventListener('click', (e) => {
+    const langBtn = e.target.closest('.lang-btn, .lang-btn-login');
+    if (langBtn) {
+        const lang = langBtn.getAttribute('data-lang');
+        updateLanguage(lang);
+    }
+});
 
 async function initializeApp() {
     if (window.location.search.includes('code=')) {
@@ -45,6 +116,7 @@ async function initializeApp() {
 function showLogin() {
     loginScreen.style.display = 'flex';
     appScreen.style.display = 'none';
+    updateLanguage(currentLanguage);
 }
 
 async function showApp() {
@@ -55,7 +127,11 @@ async function showApp() {
         userEmail.textContent = currentUser.profile?.email || 'User';
     }
     
-    addSystemMessage('Welcome! I can help you plan flights, hotels, and activities. What would you like to do?');
+    // Update language BEFORE loading history
+    updateLanguage(currentLanguage);
+    
+    // Load conversation history (language is now set)
+    await loadConversationHistory();
 }
 
 signInButton.addEventListener('click', async () => {
@@ -80,7 +156,7 @@ async function sendMessage() {
     if (!message) return;
     
     if (!currentUser) {
-        addSystemMessage('Please sign in to continue');
+        addSystemMessage(translations[currentLanguage].signInRequired);
         return;
     }
     
@@ -116,7 +192,7 @@ async function sendMessage() {
         
     } catch (error) {
         console.error('Error:', error);
-        addSystemMessage('Sorry, there was an error processing your request. Please try again.');
+        addSystemMessage(translations[currentLanguage].errorMessage);
     } finally {
         messageInput.disabled = false;
         sendButton.disabled = false;
@@ -196,4 +272,53 @@ function generateSessionId() {
 
 function generateId() {
     return 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
+}
+
+async function loadConversationHistory() {
+    try {
+        console.log('Loading conversation history for session:', sessionId);
+        console.log('Current language when loading history:', currentLanguage);
+        console.log('Welcome message will be:', translations[currentLanguage].welcomeMessage);
+        
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.access_token}`,
+            },
+            body: JSON.stringify({
+                action: 'getHistory',
+                session_id: sessionId,
+                k: 3  // Get last 3 turns (6 messages)
+            })
+        });
+
+        if (!response.ok) {
+            console.log('No history available or error loading history');
+            addSystemMessage(translations[currentLanguage].welcomeMessage);
+            return;
+        }
+
+        const data = await response.json();
+        const messages = data.messages || [];
+        
+        if (messages.length > 0) {
+            console.log(`Loading ${messages.length} previous messages`);
+            
+            // Add the historical messages
+            messages.forEach(msg => {
+                addMessage(msg.content, msg.role);
+            });
+            
+            console.log('Conversation history loaded successfully');
+        } else {
+            console.log('No previous conversation history found');
+            addSystemMessage(translations[currentLanguage].welcomeMessage);
+        }
+
+    } catch (error) {
+        console.log('Could not load conversation history:', error);
+        // Show welcome message on error
+        addSystemMessage(translations[currentLanguage].welcomeMessage);
+    }
 }

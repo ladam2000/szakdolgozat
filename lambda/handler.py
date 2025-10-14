@@ -12,8 +12,10 @@ agent_core_client = boto3.client('bedrock-agentcore')
 # Get AgentCore Runtime ARN from environment
 AGENT_RUNTIME_ARN = os.environ.get("AGENT_RUNTIME_ARN")
 
-# Memory configuration (for health check only)
-MEMORY_ID = "memory_rllrl-lfg7zBH6MH"
+# Memory configuration
+MEMORY_ID = os.environ.get("MEMORY_ID", "memory_rllrl-lfg7zBH6MH")
+BRANCH_NAME = os.environ.get("BRANCH_NAME", "main")
+REGION = os.environ.get("REGION", "eu-central-1")
 
 
 def lambda_handler(event: Dict[str, Any], context: Any):
@@ -66,10 +68,15 @@ def lambda_handler(event: Dict[str, Any], context: Any):
             print(f"Decoded body: {body_str}")
         
         body = json.loads(body_str)
+        action = body.get("action", "")
         message = body.get("message", "")
         session_id = body.get("session_id", "default-session")
         
-        print(f"Parsed - Message: {message}, Session: {session_id}")
+        print(f"Parsed - Action: {action}, Message: {message}, Session: {session_id}")
+        
+        # Handle getHistory action
+        if action == "getHistory":
+            return handle_get_history(session_id, body.get("k", 3))
         
         if not message:
             print("ERROR: Missing message in request")
@@ -180,6 +187,77 @@ def lambda_handler(event: Dict[str, Any], context: Any):
         import traceback
         traceback.print_exc()
         return create_response(500, {"error": str(e)})
+
+
+def handle_get_history(session_id: str, k: int = 3) -> Dict[str, Any]:
+    """Load conversation history from AgentCore memory.
+    
+    Args:
+        session_id: Session ID
+        k: Number of turns to retrieve
+        
+    Returns:
+        Lambda response with conversation history
+    """
+    try:
+        print(f"Loading history for session: {session_id}, k={k}")
+        
+        # Import MemoryClient from bedrock_agentcore
+        from bedrock_agentcore.memory import MemoryClient
+        
+        # Initialize memory client
+        memory_client = MemoryClient(region_name=REGION)
+        
+        # Build actor_id from session
+        actor_id = f"travel-user-{session_id}"
+        
+        # Get last k turns from memory using get_last_k_turns
+        turns = memory_client.get_last_k_turns(
+            memory_id=MEMORY_ID,
+            actor_id=actor_id,
+            session_id=session_id,
+            k=k,
+            branch_name=BRANCH_NAME
+        )
+        
+        print(f"Memory response: {len(turns)} turns retrieved")
+        
+        # Parse turns into messages
+        messages = []
+        
+        for turn in turns:
+            for message in turn:
+                role = message.get('role', '').lower()
+                content = message.get('content', {})
+                
+                # Extract text from content
+                if isinstance(content, dict):
+                    text = content.get('text', '')
+                else:
+                    text = str(content)
+                
+                if text and role in ['user', 'assistant']:
+                    messages.append({
+                        'role': role,
+                        'content': text
+                    })
+        
+        print(f"Loaded {len(messages)} messages from history")
+        
+        return create_response(200, {
+            "messages": messages,
+            "session_id": session_id
+        })
+        
+    except Exception as e:
+        print(f"Error loading history: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        # Return empty history on error (don't fail the app)
+        return create_response(200, {
+            "messages": [],
+            "session_id": session_id
+        })
 
 
 def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:

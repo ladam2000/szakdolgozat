@@ -10,9 +10,17 @@
     <!-- Login Screen -->
     <div id="loginScreen" class="login-screen" style="display: none;">
         <div class="login-container">
-            <h1>🌍 Virtual Travel Assistant</h1>
-            <p>Sign in to start planning your trip</p>
-            <button id="signInButton" class="primary-button">Sign In with Cognito</button>
+            <div class="language-switcher-login">
+                <button class="lang-btn-login" data-lang="en" title="English">
+                    <span class="flag">🇬🇧</span>
+                </button>
+                <button class="lang-btn-login" data-lang="hu" title="Magyar">
+                    <span class="flag">🇭🇺</span>
+                </button>
+            </div>
+            <h1>🌍 <span data-i18n="title">Virtual Travel Assistant</span></h1>
+            <p data-i18n="loginSubtitle">Sign in to start planning your trip</p>
+            <button id="signInButton" class="primary-button" data-i18n="signIn">Sign In with Cognito</button>
         </div>
     </div>
 
@@ -21,12 +29,20 @@
         <header>
             <div class="header-content">
                 <div>
-                    <h1>🌍 Virtual Travel Assistant</h1>
-                    <p>Plan your perfect trip with AI-powered assistance</p>
+                    <h1>🌍 <span data-i18n="title">Virtual Travel Assistant</span></h1>
+                    <p data-i18n="subtitle">Plan your perfect trip with AI-powered assistance</p>
                 </div>
                 <div class="user-info">
+                    <div class="language-switcher">
+                        <button class="lang-btn" data-lang="en" title="English">
+                            <span class="flag">🇬🇧</span>
+                        </button>
+                        <button class="lang-btn" data-lang="hu" title="Magyar">
+                            <span class="flag">🇭🇺</span>
+                        </button>
+                    </div>
                     <span id="userEmail"></span>
-                    <button id="signOutButton" class="secondary">Sign Out</button>
+                    <button id="signOutButton" class="secondary" data-i18n="signOut">Sign Out</button>
                 </div>
             </div>
         </header>
@@ -38,10 +54,11 @@
                 <input 
                     type="text" 
                     id="messageInput" 
+                    data-i18n-placeholder="inputPlaceholder"
                     placeholder="Ask about flights, hotels, or activities..."
                     autocomplete="off"
                 >
-                <button id="sendButton">Send</button>
+                <button id="sendButton" data-i18n="send">Send</button>
             </div>
         </div>
     </div>
