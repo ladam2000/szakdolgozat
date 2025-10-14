@@ -205,6 +205,14 @@ def handle_get_history(session_id: str, k: int = 3) -> Dict[str, Any]:
         # Generate trace ID
         trace_id = str(uuid.uuid4())[:8]
         
+        # Ensure session_id is at least 33 characters (AWS requirement)
+        # Pad with zeros if needed
+        runtime_session_id = session_id
+        if len(runtime_session_id) < 33:
+            runtime_session_id = runtime_session_id + '0' * (33 - len(runtime_session_id))
+        
+        print(f"Runtime session ID (padded): {runtime_session_id} (length: {len(runtime_session_id)})")
+        
         # Prepare payload for AgentCore to get history
         payload = json.dumps({
             "action": "getHistory",
@@ -219,7 +227,7 @@ def handle_get_history(session_id: str, k: int = 3) -> Dict[str, Any]:
         response = agent_core_client.invoke_agent_runtime(
             agentRuntimeArn=AGENT_RUNTIME_ARN,
             traceId=trace_id,
-            runtimeSessionId=session_id,
+            runtimeSessionId=runtime_session_id,
             payload=payload
         )
         

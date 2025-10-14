@@ -228,7 +228,14 @@ function addMessage(text, type) {
     
     let html = text;
     
-    // Convert markdown links FIRST - this is critical
+    // Convert pattern: "Text - URL" to clickable link
+    // Example: "Rentalcars.com - https://www.rentalcars.com" -> "<a>Rentalcars.com</a>"
+    html = html.replace(/([^\n\-]+?)\s*-\s*(https?:\/\/[^\s<]+)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    
+    // Convert standalone URLs to clickable links
+    html = html.replace(/(?<!href="|">)(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    
+    // Convert markdown links [text](url)
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
     
     // Convert headings
@@ -289,7 +296,11 @@ function scrollToBottom() {
 }
 
 function generateSessionId() {
-    return 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
+    // Generate a session ID that's at least 33 characters (AWS requirement)
+    // Format: session_<timestamp>_<random>
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    return `session_${timestamp}_${random}`;
 }
 
 function generateId() {
