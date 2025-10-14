@@ -15,25 +15,33 @@ const translations = {
         title: 'Virtual Travel Assistant',
         subtitle: 'Plan your perfect trip with AI-powered assistance',
         loginSubtitle: 'Sign in to start planning your trip',
-        signIn: 'Sign In with Cognito',
+        signIn: 'Sign In',
+        signUp: 'Sign Up',
+        signUpLink: 'Sign Up',
         signOut: 'Sign Out',
         send: 'Send',
         inputPlaceholder: 'Ask about flights, hotels, or activities...',
         welcomeMessage: 'Welcome! I can help you plan flights, hotels, and activities. What would you like to do?',
         errorMessage: 'Sorry, there was an error processing your request. Please try again.',
-        signInRequired: 'Please sign in to continue'
+        signInRequired: 'Please sign in to continue',
+        noAccount: "Don't have an account?",
+        haveAccount: 'Already have an account?'
     },
     hu: {
         title: 'Virtuális Utazási Asszisztens',
         subtitle: 'Tervezd meg a tökéletes utazásod AI-alapú segítséggel',
         loginSubtitle: 'Jelentkezz be az utazástervezés megkezdéséhez',
-        signIn: 'Bejelentkezés Cognito-val',
+        signIn: 'Bejelentkezés',
+        signUp: 'Regisztráció',
+        signUpLink: 'Regisztráció',
         signOut: 'Kijelentkezés',
         send: 'Küldés',
         inputPlaceholder: 'Kérdezz repülőjáratokról, szállásokról vagy programokról...',
         welcomeMessage: 'Üdvözöllek! Segíthetek repülőjáratok, szállások és programok tervezésében. Miben segíthetek?',
         errorMessage: 'Sajnálom, hiba történt a kérés feldolgozása során. Kérlek, próbáld újra.',
-        signInRequired: 'Kérlek, jelentkezz be a folytatáshoz'
+        signInRequired: 'Kérlek, jelentkezz be a folytatáshoz',
+        noAccount: 'Nincs még fiókod?',
+        haveAccount: 'Már van fiókod?'
     }
 };
 
@@ -134,8 +142,22 @@ async function showApp() {
     await loadConversationHistory();
 }
 
+const signUpLink = document.getElementById('signUpLink');
+
 signInButton.addEventListener('click', async () => {
     await userManager.signinRedirect();
+});
+
+signUpLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    // Redirect to Cognito sign-up page
+    const cognitoDomain = 'https://eu-central-1ukrxqbex5.auth.eu-central-1.amazoncognito.com';
+    const clientId = '6kmkgdkls92qfthrbglelcsdjm';
+    const redirectUri = encodeURIComponent(window.location.origin + '/');
+    const signUpUrl = `${cognitoDomain}/signup?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=email+openid+phone`;
+    
+    console.log('Redirecting to sign-up URL:', signUpUrl);
+    window.location.href = signUpUrl;
 });
 
 signOutButton.addEventListener('click', async () => {
@@ -288,7 +310,7 @@ async function loadConversationHistory() {
             },
             body: JSON.stringify({
                 action: 'getHistory',
-                session_id: sessionId,
+                sessionId: sessionId,
                 k: 3  // Get last 3 turns (6 messages)
             })
         });

@@ -54,10 +54,31 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: background 0.2s;
+    width: 100%;
+    margin-bottom: 20px;
 }
 
 .primary-button:hover {
     background: #5568d3;
+}
+
+.auth-toggle {
+    text-align: center;
+    color: #666;
+    font-size: 0.95rem;
+}
+
+.auth-toggle a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: 5px;
+    transition: color 0.2s;
+}
+
+.auth-toggle a:hover {
+    color: #5568d3;
+    text-decoration: underline;
 }
 
 /* Header */

@@ -167,7 +167,7 @@ def travel_agent_entrypoint(payload):
         payload: Dictionary with user input and session_id
     
     Returns:
-        String response from the agent
+        String response from the agent or history data
     """
     os.environ['PYTHONUNBUFFERED'] = '1'
     
@@ -179,9 +179,56 @@ def travel_agent_entrypoint(payload):
     try:
         print(f"[ENTRYPOINT] Received payload: {payload}", flush=True)
         
-        # Extract user input and session_id
-        user_input = payload.get("input") or payload.get("prompt", "")
+        # Check if this is a getHistory action
+        action = payload.get("action", "")
         session_id = payload.get("session_id") or payload.get("sessionId", "default_session")
+        
+        if action == "getHistory":
+            print(f"[ENTRYPOINT] Handling getHistory action for session: {session_id}", flush=True)
+            k = payload.get("k", 3)
+            
+            # Build actor_id from session
+            actor_id = f"travel-user-{session_id}"
+            
+            # Load conversation history from AgentCore memory
+            try:
+                recent_turns = memory_client.get_last_k_turns(
+                    memory_id=MEMORY_ID,
+                    actor_id=actor_id,
+                    session_id=session_id,
+                    k=k,
+                    branch_name=BRANCH_NAME
+                )
+                
+                # Build messages array
+                messages = []
+                for turn in recent_turns:
+                    for message in turn:
+                        role = message.get("role", "").lower()
+                        content = message.get("content", {})
+                        if isinstance(content, dict):
+                            text = content.get("text", "")
+                        else:
+                            text = str(content)
+                        
+                        if role == "user":
+                            messages.append({"role": "user", "content": text})
+                        elif role == "assistant":
+                            messages.append({"role": "assistant", "content": text})
+                
+                print(f"[ENTRYPOINT] Returning {len(messages)} messages from history", flush=True)
+                
+                # Return as JSON string
+                import json
+                return json.dumps({"messages": messages})
+                
+            except Exception as e:
+                print(f"[ENTRYPOINT] Error loading history: {e}", flush=True)
+                import json
+                return json.dumps({"messages": []})
+        
+        # Extract user input for regular queries
+        user_input = payload.get("input") or payload.get("prompt", "")
         
         if not user_input:
             return "Please provide a travel request in the 'input' or 'prompt' field."

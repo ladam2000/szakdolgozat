@@ -70,7 +70,7 @@ def lambda_handler(event: Dict[str, Any], context: Any):
         body = json.loads(body_str)
         action = body.get("action", "")
         message = body.get("message", "")
-        session_id = body.get("session_id", "default-session")
+        session_id = body.get("session_id") or body.get("sessionId", "default-session")
         
         print(f"Parsed - Action: {action}, Message: {message}, Session: {session_id}")
         
@@ -190,7 +190,7 @@ def lambda_handler(event: Dict[str, Any], context: Any):
 
 
 def handle_get_history(session_id: str, k: int = 3) -> Dict[str, Any]:
-    """Load conversation history from AgentCore memory.
+    """Load conversation history from AgentCore memory by invoking the runtime.
     
     Args:
         session_id: Session ID
@@ -202,45 +202,59 @@ def handle_get_history(session_id: str, k: int = 3) -> Dict[str, Any]:
     try:
         print(f"Loading history for session: {session_id}, k={k}")
         
-        # Import MemoryClient from bedrock_agentcore
-        from bedrock_agentcore.memory import MemoryClient
+        # Generate trace ID
+        trace_id = str(uuid.uuid4())[:8]
         
-        # Initialize memory client
-        memory_client = MemoryClient(region_name=REGION)
+        # Prepare payload for AgentCore to get history
+        payload = json.dumps({
+            "action": "getHistory",
+            "sessionId": session_id,
+            "session_id": session_id,
+            "k": k
+        }).encode('utf-8')
         
-        # Build actor_id from session
-        actor_id = f"travel-user-{session_id}"
+        print(f"Invoking AgentCore Runtime for history: {AGENT_RUNTIME_ARN}")
         
-        # Get last k turns from memory using get_last_k_turns
-        turns = memory_client.get_last_k_turns(
-            memory_id=MEMORY_ID,
-            actor_id=actor_id,
-            session_id=session_id,
-            k=k,
-            branch_name=BRANCH_NAME
+        # Invoke AgentCore Runtime with getHistory action
+        response = agent_core_client.invoke_agent_runtime(
+            agentRuntimeArn=AGENT_RUNTIME_ARN,
+            traceId=trace_id,
+            runtimeSessionId=session_id,
+            payload=payload
         )
         
-        print(f"Memory response: {len(turns)} turns retrieved")
+        print(f"History response received: {type(response)}")
         
-        # Parse turns into messages
-        messages = []
+        # Process the response
+        result = ""
+        if 'response' in response:
+            response_data = response['response']
+            
+            if hasattr(response_data, 'read'):
+                result = response_data.read().decode('utf-8')
+                try:
+                    result = json.loads(result)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            elif isinstance(response_data, str):
+                result = response_data
+            else:
+                result = str(response_data)
         
-        for turn in turns:
-            for message in turn:
-                role = message.get('role', '').lower()
-                content = message.get('content', {})
-                
-                # Extract text from content
-                if isinstance(content, dict):
-                    text = content.get('text', '')
-                else:
-                    text = str(content)
-                
-                if text and role in ['user', 'assistant']:
-                    messages.append({
-                        'role': role,
-                        'content': text
-                    })
+        print(f"History result: {result}")
+        
+        # Parse the result - it should be JSON with messages
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except:
+                pass
+        
+        # Extract messages from result
+        if isinstance(result, dict):
+            messages = result.get('messages', [])
+        else:
+            messages = []
         
         print(f"Loaded {len(messages)} messages from history")
         
