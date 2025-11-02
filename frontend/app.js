@@ -338,8 +338,8 @@ async function loadConversationHistory() {
         if (messages.length > 0) {
             console.log(`Loading ${messages.length} previous messages`);
             
-            // Add the historical messages
-            messages.forEach(msg => {
+            // Add the historical messages in LIFO order (reverse)
+            messages.reverse().forEach(msg => {
                 addMessage(msg.content, msg.role);
             });
             
