@@ -338,9 +338,18 @@ async function loadConversationHistory() {
         if (messages.length > 0) {
             console.log(`Loading ${messages.length} previous messages`);
             
-            // Add the historical messages in LIFO order (reverse)
-            messages.reverse().forEach(msg => {
-                addMessage(msg.content, msg.role);
+            // Group messages into pairs (user + assistant)
+            const pairs = [];
+            for (let i = 0; i < messages.length; i += 2) {
+                if (messages[i] && messages[i + 1]) {
+                    pairs.push([messages[i], messages[i + 1]]);
+                }
+            }
+            
+            // Reverse pairs for LIFO, but keep user-assistant order within each pair
+            pairs.reverse().forEach(pair => {
+                addMessage(pair[0].content, pair[0].role); // user
+                addMessage(pair[1].content, pair[1].role); // assistant
             });
             
             console.log('Conversation history loaded successfully');
