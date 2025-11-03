@@ -228,15 +228,15 @@ function addMessage(text, type) {
     
     let html = text;
     
-    // Convert pattern: "Text - URL" to clickable link
-    // Example: "Rentalcars.com - https://www.rentalcars.com" -> "<a>Rentalcars.com</a>"
-    html = html.replace(/([^\n\-]+?)\s*-\s*(https?:\/\/[^\s<]+)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    // Convert markdown links [text](url) FIRST
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
     
-    // Convert standalone URLs to clickable links
-    html = html.replace(/(?<!href="|">)(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    // Convert pattern: "Text: URL" or "Text - URL" to clickable link
+    html = html.replace(/([^:\n]+?):\s*(https?:\/\/[^\s)<]+)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    html = html.replace(/([^\n\-]+?)\s*-\s*(https?:\/\/[^\s)<]+)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
     
-    // Convert markdown links [text](url)
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    // Convert standalone URLs to clickable links (but not if already in href)
+    html = html.replace(/(?<!href="|">|<a href="|">)(https?:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
     
     // Convert headings
     html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
