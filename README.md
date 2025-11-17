@@ -381,7 +381,7 @@ Check CloudWatch Logs for Bedrock AgentCore runtime logs.
 
 ## Testing
 
-Simple and effective test suite with 8 essential tests.
+Comprehensive test suite with 42 tests covering Lambda handler and AgentCore runtime.
 
 ### Quick Start
 
@@ -392,9 +392,20 @@ Simple and effective test suite with 8 essential tests.
 
 ### Test Coverage
 
-- ✅ 8 tests covering basic functionality, security, and performance
-- ✅ 50% code coverage on lambda/handler.py
+- ✅ **42 tests** covering all components
+- ✅ **Lambda Handler**: 17 tests (52% coverage)
+- ✅ **AgentCore Runtime**: 25 tests (30% coverage)
+- ✅ **Overall**: 40% code coverage
 - ✅ All tests pass in < 1 second
+
+### Test Types
+
+- Unit Tests (6)
+- Adversarial Tests (5)
+- Performance Tests (3)
+- Load Tests (3)
+- Configuration Tests (13)
+- Structure Tests (12)
 
 ### Coverage Report
 

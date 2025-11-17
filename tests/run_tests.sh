@@ -36,7 +36,7 @@ echo ""
 
 # Run all tests
 echo -e "${YELLOW}Running tests...${NC}"
-if pytest tests/test_basic.py -v --tb=short --cov=lambda --cov-report=term --cov-report=html; then
+if pytest tests/test_basic.py tests/test_agent_runtime.py -v --tb=short --cov=lambda --cov=agentcore --cov-report=term --cov-report=html; then
     echo -e "${GREEN}✓ All tests passed!${NC}"
     FAILED=0
 else
