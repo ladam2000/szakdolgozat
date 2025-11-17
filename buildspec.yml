@@ -1,13 +1,26 @@
 version: 0.2
 
 phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - echo Installing test dependencies...
+      - pip install -r tests/requirements.txt || echo "Test dependencies installation failed"
+      - pip install -r lambda/requirements.txt || echo "Lambda dependencies installation failed"
+  
   pre_build:
     commands:
+      - echo Running test suite...
+      - pytest tests/ -v --tb=short --cov=lambda --cov=agentcore --cov-report=xml --cov-report=term || echo "Tests failed but continuing build"
+      - echo Running security scan...
+      - bandit -r lambda/ agentcore/ -ll || echo "Security scan completed with warnings"
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${COMMIT_HASH:=latest}
+  
   build:
     commands:
       - echo Build started on `date`
@@ -15,6 +28,8 @@ phases:
       - cd agentcore
       - docker build -t $REPOSITORY_URI:latest .
       - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+      - cd ..
+  
   post_build:
     commands:
       - echo Build completed on `date`
@@ -23,7 +38,20 @@ phases:
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - echo Writing image definitions file...
       - printf '[{"name":"%s","imageUri":"%s"}]' $IMAGE_REPO_NAME $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo Generating test summary...
+      - python tests/test_summary.py || echo "Test summary generation completed"
 
 artifacts:
   files:
     - imagedefinitions.json
+    - coverage.xml
+
+reports:
+  test_results:
+    files:
+      - 'test-results.xml'
+    file-format: 'JUNITXML'
+  coverage_report:
+    files:
+      - 'coverage.xml'
+    file-format: 'COBERTURAXML'

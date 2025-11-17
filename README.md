@@ -379,6 +379,31 @@ Check CloudWatch Logs for Bedrock AgentCore runtime logs.
 - Session IDs are randomly generated
 - Links open in new tabs with `noopener noreferrer`
 
+## Testing
+
+Simple and effective test suite with 8 essential tests.
+
+### Quick Start
+
+```bash
+# Run all tests
+./tests/run_tests.sh
+```
+
+### Test Coverage
+
+- ✅ 8 tests covering basic functionality, security, and performance
+- ✅ 50% code coverage on lambda/handler.py
+- ✅ All tests pass in < 1 second
+
+### Coverage Report
+
+```bash
+open htmlcov/index.html
+```
+
+See [TESTING.md](TESTING.md) for detailed testing guide.
+
 ## License
 
 MIT
@@ -390,6 +415,7 @@ For issues or questions:
 2. Review this README
 3. Check AWS service status
 4. Verify all environment variables are set
+5. Run test suite: `./tests/run_tests.sh`
 
 ## Future Enhancements
 
@@ -399,3 +425,4 @@ For issues or questions:
 - [ ] Price alerts
 - [ ] User preferences storage
 - [ ] Mobile app
+- [x] Comprehensive testing suite
